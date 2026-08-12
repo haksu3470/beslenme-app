@@ -4,6 +4,7 @@ import requests
 import re
 import json
 import os
+import hashlib
 from PIL import Image
 import numpy as np
 import easyocr
@@ -11,6 +12,15 @@ import easyocr
 st.set_page_config(page_title="Beslenme & Öğün Takibi", layout="wide")
 
 DB_FILE = "database.json"
+
+# --- ŞİFRELEME YARDIMCISI ---
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    if make_hashes(password) == hashed_text:
+        return hashed_text
+    return False
 
 # --- ZENGİNLEŞTİRİLMİŞ VARSAYILAN BESİN LİSTESİ ---
 DEFAULT_FOOD_DATABASE = [
@@ -77,21 +87,23 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 48, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- VERİTABANI YÜKLEME VE BİRLEŞTİRME ---
+# --- VERİTABANI YÜKLEME VE İLK KURULUM ---
 def load_data():
+    # Varsayılan Hesaplar (Admin varsayılan şifre: admin123)
     db = {
         "users": {
-            "Hüseyin": {
-                "cinsiyet": "Erkek", "yas": 30, "kilo": 75.0, "boy": 175,
+            "admin": {
+                "password": make_hashes("admin123"),
+                "is_admin": True,
+                "cinsiyet": "Erkek", "yas": 35, "kilo": 80.0, "boy": 175,
                 "aktivite": "Orta Hareketli (Haftada 3-5 gün egzersiz)",
-                "hedef": "Kilo Verme (Yağ Yakımı)",
-                "target_kalori": 2000.0, "target_protein": 150.0,
-                "target_karb": 225.0, "target_yag": 55.0,
+                "hedef": "Kilo Koruma",
+                "target_kalori": 2200.0, "target_protein": 165.0,
+                "target_karb": 240.0, "target_yag": 60.0,
                 "daily_meals": []
             }
         },
-        "food_db": DEFAULT_FOOD_DATABASE,
-        "active_user": "Hüseyin"
+        "food_db": DEFAULT_FOOD_DATABASE
     }
 
     if os.path.exists(DB_FILE):
@@ -99,15 +111,12 @@ def load_data():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 saved_db = json.load(f)
                 db["users"] = saved_db.get("users", db["users"])
-                db["active_user"] = saved_db.get("active_user", "Hüseyin")
                 
                 existing_foods = saved_db.get("food_db", [])
                 existing_names = {f["isim"] for f in existing_foods}
-                
                 for default_food in DEFAULT_FOOD_DATABASE:
                     if default_food["isim"] not in existing_names:
                         existing_foods.append(default_food)
-                
                 db["food_db"] = existing_foods
         except Exception:
             pass
@@ -128,44 +137,98 @@ db = st.session_state.db
 def load_ocr():
     return easyocr.Reader(['tr', 'en'])
 
-# --- SIDEBAR: KULLANICI SEÇİMİ VE PROFiL ---
-st.sidebar.header("👥 Kullanıcı Yönetimi")
+# --- OTURUM YÖNETİMİ ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
 
-user_list = list(db["users"].keys())
-selected_user_option = st.sidebar.selectbox(
-    "Aktif Kişi Seçin", 
-    user_list + ["+ Yeni Kişi Ekle"]
-)
+# --- GİRİŞ & KAYIT EKRANI ---
+if not st.session_state.logged_in:
+    st.title("🔐 Beslenme & Öğün Takip - Giriş Portalı")
+    
+    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Yeni Hesap Oluştur"], horizontal=True)
+    
+    if choice == "Giriş Yap":
+        st.subheader("🔑 Kullanıcı Girişi")
+        username = st.text_input("Kullanıcı Adı")
+        password = st.text_input("Şifre", type='password')
+        
+        if st.button("Giriş Yap"):
+            if username in db["users"]:
+                hashed_pw = db["users"][username]["password"]
+                if check_hashes(password, hashed_pw):
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = username
+                    st.success(f"Hoş geldiniz, {username}!")
+                    st.rerun()
+                else:
+                    st.error("Hatalı şifre!")
+            else:
+                st.error("Kullanıcı bulunamadı!")
 
-if selected_user_option == "+ Yeni Kişi Ekle":
-    new_name = st.sidebar.text_input("Yeni Kişi Adı")
-    if st.sidebar.button("Kişiyi Oluştur"):
-        if new_name and new_name not in db["users"]:
-            db["users"][new_name] = {
-                "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
-                "aktivite": "Hareketsiz (Masa başı iş)",
-                "hedef": "Kilo Koruma",
-                "target_kalori": 2000.0, "target_protein": 150.0,
-                "target_karb": 225.0, "target_yag": 55.0,
-                "daily_meals": []
-            }
-            db["active_user"] = new_name
-            save_data(db)
-            st.rerun()
-    active_user = db.get("active_user", user_list[0])
-else:
-    active_user = selected_user_option
-    db["active_user"] = active_user
+    elif choice == "Yeni Hesap Oluştur":
+        st.subheader("📝 Yeni Kullanıcı Kaydı")
+        new_user = st.text_input("Kullanıcı Adı Belirleyin")
+        new_password = st.text_input("Şifre Belirleyin", type='password')
+        
+        c_col1, c_col2 = st.columns(2)
+        new_cinsiyet = c_col1.selectbox("Cinsiyet", ["Erkek", "Kadın"])
+        new_yas = c_col2.number_input("Yaş", min_value=15, max_value=90, value=30)
+        new_kilo = c_col1.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=70.0, step=0.5)
+        new_boy = c_col2.number_input("Boy (cm)", min_value=120, max_value=220, value=170)
+        
+        if st.button("Hesabımı Oluştur"):
+            if new_user in db["users"]:
+                st.warning("Bu kullanıcı adı zaten alınmış!")
+            elif not new_user or not new_password:
+                st.error("Lütfen kullanıcı adı ve şifre girin.")
+            else:
+                # BMR ve Varsayılan Hedef Hesaplama
+                bmr = (10 * new_kilo) + (6.25 * new_boy) - (5 * new_yas) + (5 if new_cinsiyet == "Erkek" else -161)
+                tdee = bmr * 1.375
+                
+                db["users"][new_user] = {
+                    "password": make_hashes(new_password),
+                    "is_admin": False,
+                    "cinsiyet": new_cinsiyet,
+                    "yas": new_yas,
+                    "kilo": new_kilo,
+                    "boy": new_boy,
+                    "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)",
+                    "hedef": "Kilo Koruma",
+                    "target_kalori": tdee,
+                    "target_protein": (tdee * 0.30) / 4,
+                    "target_karb": (tdee * 0.45) / 4,
+                    "target_yag": (tdee * 0.25) / 9,
+                    "daily_meals": []
+                }
+                save_data(db)
+                st.success("Hesabınız başarıyla oluşturuldu! Şimdi 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
 
-user_data = db["users"][active_user]
+    st.stop() # Giriş yapılmadıysa uygulamanın devamını gösterme
+
+# --- UYGULAMA İÇİ (GİRİŞ YAPILDIKTAN SONRA) ---
+current_username = st.session_state.current_user
+user_data = db["users"][current_username]
+is_admin = user_data.get("is_admin", False)
+
+# SIDEBAR: KULLANICI BİLGİSİ VE ÇIKIŞ
+st.sidebar.markdown(f"### 👤 Kullanıcı: **{current_username}**")
+if is_admin:
+    st.sidebar.info("👑 YÖNETİCİ HESABI (ADMIN)")
+
+if st.sidebar.button("🚪 Çıkış Yap"):
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
+    st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader(f"⚙️ {active_user} - Profil Ayarları")
+st.sidebar.subheader("⚙️ Profil Ayarlarınız")
 
-cinsiyet = st.sidebar.selectbox("Cinsiyet Bilgisi", ["Erkek", "Kadın"], index=0 if user_data["cinsiyet"] == "Erkek" else 1)
-yas = st.sidebar.number_input("Yaş Bilgisi", min_value=15, max_value=90, value=int(user_data["yas"]))
-kilo = st.sidebar.number_input("Vücut Ağırlığı (kg)", min_value=30.0, max_value=200.0, value=float(user_data["kilo"]), step=0.5)
-boy = st.sidebar.number_input("Boy Uzunluğu (cm)", min_value=120, max_value=220, value=int(user_data["boy"]))
+cinsiyet = st.sidebar.selectbox("Cinsiyet", ["Erkek", "Kadın"], index=0 if user_data["cinsiyet"] == "Erkek" else 1)
+yas = st.sidebar.number_input("Yaş", min_value=15, max_value=90, value=int(user_data["yas"]))
+kilo = st.sidebar.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=float(user_data["kilo"]), step=0.5)
+boy = st.sidebar.number_input("Boy (cm)", min_value=120, max_value=220, value=int(user_data["boy"]))
 
 akt_options = [
     "Hareketsiz (Masa başı iş)",
@@ -180,13 +243,8 @@ hedef_options = ["Kilo Verme (Yağ Yakımı)", "Kilo Koruma", "Kilo Alma / Kas Y
 hedef_index = hedef_options.index(user_data["hedef"]) if user_data["hedef"] in hedef_options else 0
 hedef = st.sidebar.selectbox("Hedefiniz", hedef_options, index=hedef_index)
 
-# HEDEF HESAPLAMA VE KAYDET
-if st.sidebar.button("💾 Bilgileri ve Hesaplamayı Kaydet"):
-    if cinsiyet == "Erkek":
-        bmr = (10 * kilo) + (6.25 * boy) - (5 * yas) + 5
-    else:
-        bmr = (10 * kilo) + (6.25 * boy) - (5 * yas) - 161
-
+if st.sidebar.button("💾 Profil ve Hedefleri Kaydet"):
+    bmr = (10 * kilo) + (6.25 * boy) - (5 * yas) + (5 if cinsiyet == "Erkek" else -161)
     akt_carpanlar = {
         "Hareketsiz (Masa başı iş)": 1.2,
         "Hafif Hareketli (Haftada 1-3 gün egzersiz)": 1.375,
@@ -214,19 +272,20 @@ if st.sidebar.button("💾 Bilgileri ve Hesaplamayı Kaydet"):
     user_data["target_yag"] = (calc_kalori * 0.25) / 9
 
     save_data(db)
-    st.sidebar.success("Profil ve Hedefler Kaydedildi!")
+    st.sidebar.success("Profil Kaydedildi!")
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎯 Aktif Günlük Hedefler")
-st.sidebar.write(f"• **Hedef Kalori:** {int(user_data['target_kalori'])} kcal")
-st.sidebar.write(f"• **Hedef Protein:** {int(user_data['target_protein'])} Gram")
-st.sidebar.write(f"• **Hedef Karbonhidrat:** {int(user_data['target_karb'])} Gram")
-st.sidebar.write(f"• **Hedef Yağ:** {int(user_data['target_yag'])} Gram")
+st.sidebar.subheader("🎯 Günlük Hedefleriniz")
+st.sidebar.write(f"• **Kalori:** {int(user_data['target_kalori'])} kcal")
+st.sidebar.write(f"• **Protein:** {int(user_data['target_protein'])} Gram")
+st.sidebar.write(f"• **Karbonhidrat:** {int(user_data['target_karb'])} Gram")
+st.sidebar.write(f"• **Yağ:** {int(user_data['target_yag'])} Gram")
 
-# --- ANA EKRAN ---
-st.title(f"🥗 {active_user} - Beslenme ve Öğün Takibi")
+# --- ANA EKRAN VE SEKMELER ---
+st.title(f"🥗 {current_username} - Beslenme ve Öğün Takibi")
 
+# YARDIMCI FONKSİYONLAR
 def fetch_product_by_barcode(barcode):
     url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
     try:
@@ -273,8 +332,13 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-# --- SEKMELER ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Öğün Oluştur", "🔍 Barkod Arama", "📷 Etiket Okuma (OCR)", "📊 Günlük Özet & Hedefler", "➕ Ürün Yönetimi"])
+# Sekme tanımları (Admin ise ek 6. sekme görünür)
+tabs_list = ["📝 Öğün Oluştur", "🔍 Barkod Arama", "📷 Etiket Okuma (OCR)", "📊 Günlük Özet & Hedefler", "➕ Ürün Yönetimi"]
+if is_admin:
+    tabs_list.append("👑 Admin Paneli")
+
+tabs = st.tabs(tabs_list)
+tab1, tab2, tab3, tab4, tab5 = tabs[0], tabs[1], tabs[2], tabs[3], tabs[4]
 
 food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
@@ -282,15 +346,11 @@ if "kategori" not in food_df.columns:
 
 # TAB 1: Öğün Oluştur
 with tab1:
-    st.subheader(f"{active_user} İçin Besin Ekle")
-    
+    st.subheader("Öğüne Besin Ekle")
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = st.selectbox("Kategori Filtresi", categories)
     
-    if selected_cat != "Tüm Kategoriler":
-        filtered_df = food_df[food_df["kategori"] == selected_cat]
-    else:
-        filtered_df = food_df
+    filtered_df = food_df[food_df["kategori"] == selected_cat] if selected_cat != "Tüm Kategoriler" else food_df
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -315,38 +375,24 @@ with tab1:
         }
         user_data["daily_meals"].append(meal_item)
         save_data(db)
-        st.success(f"{gramaj}g {selected_food_name} ({meal_type}) eklendi ve kaydedildi!")
+        st.success(f"{gramaj}g {selected_food_name} ({meal_type}) eklendi!")
         st.rerun()
 
-    # --- ÖĞÜN TİPİNE GÖRE DİNAMİK LİSTELEME ---
     st.markdown("---")
+    filter_meal_type = st.radio("Listelenecek Öğünü Seçin:", ["Seçili Öğün (" + meal_type + ")", "Tüm Günün Öğünleri"], horizontal=True)
     
-    # Öğün Filtresi (Seçilen Öğüne Göre veya Tümünü Göster)
-    filter_meal_type = st.radio(
-        "Listelenecek Öğünü Seçin:", 
-        ["Seçili Öğün (" + meal_type + ")", "Tüm Günün Öğünleri"], 
-        horizontal=True
-    )
-    
-    if "Seçili Öğün" in filter_meal_type:
-        displayed_meals = [item for item in user_data["daily_meals"] if item["Öğün"] == meal_type]
-        st.subheader(f"📋 {meal_type} İçin Eklenenler ({len(displayed_meals)} Adet)")
-    else:
-        displayed_meals = user_data["daily_meals"]
-        st.subheader(f"📋 Tüm Gün Eklenen Öğünler ({len(displayed_meals)} Adet)")
+    displayed_meals = [item for item in user_data["daily_meals"] if item["Öğün"] == meal_type] if "Seçili Öğün" in filter_meal_type else user_data["daily_meals"]
+    st.subheader(f"📋 Eklenen Öğünler ({len(displayed_meals)} Adet)")
 
     if displayed_meals:
         for idx, item in enumerate(user_data["daily_meals"]):
-            # Filtreye göre gösterme kontrolü
             if "Seçili Öğün" in filter_meal_type and item["Öğün"] != meal_type:
                 continue
-
             c_meal, c_name, c_cal, c_macro, c_del = st.columns([1.5, 2.5, 1.5, 2.5, 1])
             c_meal.write(f"**{item['Öğün']}**")
             c_name.write(f"{item['Besin']} ({item['Gramaj (g)']}g)")
             c_cal.write(f"🔥 {item['Kalori (kcal)']} kcal")
             c_macro.write(f"P: {item['Protein (g)']}g | K: {item['Karbonhidrat (g)']}g | Y: {item['Yağ (g)']}g")
-            
             if c_del.button("🗑️ Sil", key=f"del_tab1_{idx}"):
                 user_data["daily_meals"].pop(idx)
                 save_data(db)
@@ -391,7 +437,7 @@ with tab3:
 
         if 'parsed_ocr' in st.session_state:
             p_data = st.session_state['parsed_ocr']
-            st.subheader("Okunan Değerler (100g İçin - İsterseniz Düzenleyin)")
+            st.subheader("Okunan Değerler (100g İçin)")
             c_kal = st.number_input("Kalori (kcal)", value=p_data['kalori'])
             c_pro = st.number_input("Protein (g)", value=p_data['protein'])
             c_karb = st.number_input("Karbonhidrat (g)", value=p_data['karbonhidrat'])
@@ -402,15 +448,7 @@ with tab3:
             
             if st.button("Veritabanına Kaydet"):
                 new_id = len(db["food_db"]) + 1
-                new_entry = {
-                    "id": new_id, 
-                    "kategori": c_kat,
-                    "isim": new_food_name, 
-                    "kalori": float(c_kal), 
-                    "protein": float(c_pro), 
-                    "karbonhidrat": float(c_karb), 
-                    "yag": float(c_yag)
-                }
+                new_entry = {"id": new_id, "kategori": c_kat, "isim": new_food_name, "kalori": float(c_kal), "protein": float(c_pro), "karbonhidrat": float(c_karb), "yag": float(c_yag)}
                 db["food_db"].append(new_entry)
                 save_data(db)
                 del st.session_state['parsed_ocr']
@@ -419,130 +457,89 @@ with tab3:
 
 # TAB 4: Günlük Özet & Hedefler
 with tab4:
-    st.subheader(f"📊 {active_user} - Günlük Tüketim Özeti")
-    
-    t_kal = user_data["target_kalori"]
-    t_pro = user_data["target_protein"]
-    t_karb = user_data["target_karb"]
-    t_yag = user_data["target_yag"]
-
+    st.subheader(f"📊 Günlük Tüketim Özeti - ({current_username})")
+    t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
     meals = user_data["daily_meals"]
 
     if meals:
         df_meals = pd.DataFrame(meals)
-        tot_kalori = df_meals['Kalori (kcal)'].sum()
-        tot_protein = df_meals['Protein (g)'].sum()
-        tot_karb = df_meals['Karbonhidrat (g)'].sum()
-        tot_yag = df_meals['Yağ (g)'].sum()
+        tot_kalori, tot_protein, tot_karb, tot_yag = df_meals['Kalori (kcal)'].sum(), df_meals['Protein (g)'].sum(), df_meals['Karbonhidrat (g)'].sum(), df_meals['Yağ (g)'].sum()
 
         m1, m2, m3, m4 = st.columns(4)
-        kalan_kalori = int(t_kal - tot_kalori)
-        
-        m1.metric("Alınan Kalori", f"{tot_kalori:.1f} kcal", f"Kalan: {kalan_kalori} kcal")
+        m1.metric("Alınan Kalori", f"{tot_kalori:.1f} kcal", f"Kalan: {int(t_kal - tot_kalori)} kcal")
         m2.metric("Alınan Protein", f"{tot_protein:.1f} g", f"Hedef: {int(t_pro)} g")
         m3.metric("Alınan Karbonhidrat", f"{tot_karb:.1f} g", f"Hedef: {int(t_karb)} g")
         m4.metric("Alınan Yağ", f"{tot_yag:.1f} g", f"Hedef: {int(t_yag)} g")
 
         st.markdown("---")
-        kal_ratio = min(tot_kalori / t_kal, 1.0) if t_kal > 0 else 0.0
-        pro_ratio = min(tot_protein / t_pro, 1.0) if t_pro > 0 else 0.0
-        karb_ratio = min(tot_karb / t_karb, 1.0) if t_karb > 0 else 0.0
-        yag_ratio = min(tot_yag / t_yag, 1.0) if t_yag > 0 else 0.0
-
         st.write("### 🎯 Hedef İlerleme Barları")
-        st.write("**Kalori Doluluk Oranı**")
-        st.progress(kal_ratio)
+        st.progress(min(tot_kalori / t_kal, 1.0) if t_kal > 0 else 0.0)
 
         col_m1, col_m2, col_m3 = st.columns(3)
-        with col_m1:
-            st.write("**Protein**")
-            st.progress(pro_ratio)
-        with col_m2:
-            st.write("**Karbonhidrat**")
-            st.progress(karb_ratio)
-        with col_m3:
-            st.write("**Yağ**")
-            st.progress(yag_ratio)
+        col_m1.write("**Protein**"); col_m1.progress(min(tot_protein / t_pro, 1.0) if t_pro > 0 else 0.0)
+        col_m2.write("**Karbonhidrat**"); col_m2.progress(min(tot_karb / t_karb, 1.0) if t_karb > 0 else 0.0)
+        col_m3.write("**Yağ**"); col_m3.progress(min(tot_yag / t_yag, 1.0) if t_yag > 0 else 0.0)
 
         st.markdown("---")
         col_t1, col_t2 = st.columns([4, 1])
-        with col_t1:
-            st.subheader("📋 Öğün Öğün Yenen Yemekler")
-        with col_t2:
-            if st.button("🗑️ Tüm Günü Sıfırla"):
-                user_data["daily_meals"] = []
+        col_t1.subheader("📋 Bugün Yenen Yemekler")
+        if col_t2.button("🗑️ Tüm Günü Sıfırla"):
+            user_data["daily_meals"] = []
+            save_data(db)
+            st.rerun()
+
+        for idx, item in enumerate(meals):
+            c_meal, c_name, c_cal, c_macro, c_del = st.columns([1.5, 2.5, 1.5, 2.5, 1])
+            c_meal.write(f"**{item['Öğün']}**")
+            c_name.write(f"{item['Besin']} ({item['Gramaj (g)']}g)")
+            c_cal.write(f"🔥 {item['Kalori (kcal)']} kcal")
+            c_macro.write(f"P: {item['Protein (g)']}g | K: {item['Karbonhidrat (g)']}g | Y: {item['Yağ (g)']}g")
+            if c_del.button("🗑️ Sil", key=f"del_tab4_{idx}"):
+                user_data["daily_meals"].pop(idx)
                 save_data(db)
                 st.rerun()
-
-        # Öğünleri Kendi Başlıklarında Gruplama
-        for meal_group in ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"]:
-            group_items = [m for m in meals if m["Öğün"] == meal_group]
-            if group_items:
-                st.write(f"#### 🍽️ {meal_group}")
-                for idx, item in enumerate(meals):
-                    if item["Öğün"] == meal_group:
-                        c_meal, c_name, c_cal, c_macro, c_del = st.columns([1.5, 2.5, 1.5, 2.5, 1])
-                        c_meal.write(f"**{item['Öğün']}**")
-                        c_name.write(f"{item['Besin']} ({item['Gramaj (g)']}g)")
-                        c_cal.write(f"🔥 {item['Kalori (kcal)']} kcal")
-                        c_macro.write(f"P: {item['Protein (g)']}g | K: {item['Karbonhidrat (g)']}g | Y: {item['Yağ (g)']}g")
-                        
-                        if c_del.button("🗑️ Sil", key=f"del_tab4_{idx}"):
-                            user_data["daily_meals"].pop(idx)
-                            save_data(db)
-                            st.rerun()
     else:
-        st.info("Henüz bir öğün eklenmedi. 'Öğün Oluştur' sekmesinden yemek ekleyerek başlayabilirsiniz.")
+        st.info("Henüz bir öğün eklenmedi.")
 
 # TAB 5: DİNAMİK ÜRÜN YÖNETİMİ
 with tab5:
     st.subheader("➕ Veritabanına Yeni Besin / Yemek Ekle")
     col_a, col_b = st.columns(2)
-    with col_a:
-        custom_name = st.text_input("Yiyecek / Ürün Adı")
-        custom_cat = st.selectbox("Kategorisi", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
-    with col_b:
-        col_b1, col_b2 = st.columns(2)
-        custom_kal = col_b1.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0, step=1.0)
-        custom_pro = col_b2.number_input("100g Protein (g)", min_value=0.0, value=1.0, step=0.1)
-        custom_karb = col_b1.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0, step=0.1)
-        custom_yag = col_b2.number_input("100g Yağ (g)", min_value=0.0, value=0.0, step=0.1)
+    custom_name = col_a.text_input("Yiyecek / Ürün Adı")
+    custom_cat = col_a.selectbox("Kategorisi", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
+    custom_kal = col_b.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0)
+    custom_pro = col_b.number_input("100g Protein (g)", min_value=0.0, value=1.0)
+    custom_karb = col_b.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0)
+    custom_yag = col_b.number_input("100g Yağ (g)", min_value=0.0, value=0.0)
 
     if st.button("✨ Veritabanına Kalıcı Olarak Ekle"):
         if custom_name:
-            existing_names = [f["isim"].lower() for f in db["food_db"]]
-            if custom_name.lower() in existing_names:
-                st.warning(f"'{custom_name}' zaten veritabanında mevcut!")
-            else:
-                new_id = len(db["food_db"]) + 1
-                new_entry = {
-                    "id": new_id,
-                    "kategori": custom_cat,
-                    "isim": custom_name,
-                    "kalori": float(custom_kal),
-                    "protein": float(custom_pro),
-                    "karbonhidrat": float(custom_karb),
-                    "yag": float(custom_yag)
-                }
-                db["food_db"].append(new_entry)
-                save_data(db)
-                st.success(f"'{custom_name}' başarıyla veritabanına eklendi!")
-                st.rerun()
+            new_id = len(db["food_db"]) + 1
+            new_entry = {"id": new_id, "kategori": custom_cat, "isim": custom_name, "kalori": float(custom_kal), "protein": float(custom_pro), "karbonhidrat": float(custom_karb), "yag": float(custom_yag)}
+            db["food_db"].append(new_entry)
+            save_data(db)
+            st.success(f"'{custom_name}' eklendi!")
+            st.rerun()
+
+# TAB 6: ADMIN PANENİ (SADECE ADMİN GÖRÜR)
+if is_admin:
+    with tabs[5]:
+        st.subheader("👑 Admin Paneli - Tüm Kullanıcıların Takip Özeti")
+        st.write("Sistemdeki tüm kullanıcıların günlük kalori tüketimlerini buradan izleyebilirsiniz.")
+        
+        all_users = list(db["users"].keys())
+        selected_view_user = st.selectbox("İncelemek İstediğiniz Kullanıcıyı Seçin", all_users)
+        
+        u_info = db["users"][selected_view_user]
+        st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
+        st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
+        
+        u_meals = u_info.get("daily_meals", [])
+        if u_meals:
+            u_df = pd.DataFrame(u_meals)
+            tot_kal = u_df['Kalori (kcal)'].sum()
+            st.metric("Bugün Tükettiği Toplam Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info['target_kalori'] - tot_kal)} kcal")
+            st.write("#### Tükettiği Yemekler Listesi:")
+            st.dataframe(u_df, use_container_width=True)
         else:
-            st.error("Lütfen bir yiyecek adı girin.")
-
-    st.markdown("---")
-    st.subheader("🗑️ Veritabanındaki Besinleri Yönet / Sil")
-    
-    del_cat = st.selectbox("Filtrelenecek Kategori", ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique())), key="del_cat_select")
-    if del_cat != "Tüm Kategoriler":
-        f_df = food_df[food_df["kategori"] == del_cat]
-    else:
-        f_df = food_df
-
-    food_to_delete = st.selectbox("Silinecek Besini Seçin", f_df["isim"].tolist())
-    if st.button("❌ Bu Besini Veritabanından Sil"):
-        db["food_db"] = [f for f in db["food_db"] if f["isim"] != food_to_delete]
-        save_data(db)
-        st.success(f"'{food_to_delete}' veritabanından silindi.")
-        st.rerun()
+            st.info(f"{selected_view_user} henüz bugün hiçbir yemek eklemedi.")
