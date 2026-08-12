@@ -3,3 +3,4 @@ pandas
 requests
 pillow
 easyocr
+extra-streamlit-components
