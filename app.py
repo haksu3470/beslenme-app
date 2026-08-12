@@ -8,18 +8,10 @@ import hashlib
 from PIL import Image
 import numpy as np
 import easyocr
-import extra_streamlit_components as stx
 
 st.set_page_config(page_title="Beslenme & Öğün Takibi", layout="wide")
 
 DB_FILE = "database.json"
-
-# --- ÇEREZ (COOKIE) YÖNETİCİSİ ---
-@st.cache_resource(experimental_allow_widgets=True)
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
 
 # --- ŞİFRELEME YARDIMCISI ---
 def make_hashes(password):
@@ -97,6 +89,7 @@ DEFAULT_FOOD_DATABASE = [
 
 # --- VERİTABANI YÜKLEME VE İLK KURULUM ---
 def load_data():
+    # Varsayılan Hesaplar (Admin varsayılan şifre: admin123)
     db = {
         "users": {
             "admin": {
@@ -139,21 +132,15 @@ if 'db' not in st.session_state:
 
 db = st.session_state.db
 
-# --- OTURUM & ÇEREZ KONTROLÜ (BENİ HATIRLA MANTIĞI) ---
-saved_user = cookie_manager.get('logged_user')
-
-if 'logged_in' not in st.session_state:
-    if saved_user and saved_user in db["users"]:
-        st.session_state.logged_in = True
-        st.session_state.current_user = saved_user
-    else:
-        st.session_state.logged_in = False
-        st.session_state.current_user = None
-
 # --- OCR MODELİ ---
 @st.cache_resource
 def load_ocr():
     return easyocr.Reader(['tr', 'en'])
+
+# --- OTURUM YÖNETİMİ ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
 
 # --- GİRİŞ & KAYIT EKRANI ---
 if not st.session_state.logged_in:
@@ -165,7 +152,6 @@ if not st.session_state.logged_in:
         st.subheader("🔑 Kullanıcı Girişi")
         username = st.text_input("Kullanıcı Adı")
         password = st.text_input("Şifre", type='password')
-        remember_me = st.checkbox("☑️ Beni Hatırla / Bu Cihazda Oturumu Açık Tut", value=True)
         
         if st.button("Giriş Yap"):
             if username in db["users"]:
@@ -173,10 +159,6 @@ if not st.session_state.logged_in:
                 if check_hashes(password, hashed_pw):
                     st.session_state.logged_in = True
                     st.session_state.current_user = username
-                    
-                    if remember_me:
-                        cookie_manager.set('logged_user', username, key='set_user_cookie')
-                    
                     st.success(f"Hoş geldiniz, {username}!")
                     st.rerun()
                 else:
@@ -201,6 +183,7 @@ if not st.session_state.logged_in:
             elif not new_user or not new_password:
                 st.error("Lütfen kullanıcı adı ve şifre girin.")
             else:
+                # BMR ve Varsayılan Hedef Hesaplama
                 bmr = (10 * new_kilo) + (6.25 * new_boy) - (5 * new_yas) + (5 if new_cinsiyet == "Erkek" else -161)
                 tdee = bmr * 1.375
                 
@@ -220,11 +203,11 @@ if not st.session_state.logged_in:
                     "daily_meals": []
                 }
                 save_data(db)
-                st.success("Hesabınız oluşturuldu! 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
+                st.success("Hesabınız başarıyla oluşturuldu! Şimdi 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
 
-    st.stop()
+    st.stop() # Giriş yapılmadıysa uygulamanın devamını gösterme
 
-# --- UYGULAMA İÇİ ---
+# --- UYGULAMA İÇİ (GİRİŞ YAPILDIKTAN SONRA) ---
 current_username = st.session_state.current_user
 user_data = db["users"][current_username]
 is_admin = user_data.get("is_admin", False)
@@ -237,7 +220,6 @@ if is_admin:
 if st.sidebar.button("🚪 Çıkış Yap"):
     st.session_state.logged_in = False
     st.session_state.current_user = None
-    cookie_manager.delete('logged_user', key='delete_user_cookie')
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -303,6 +285,7 @@ st.sidebar.write(f"• **Yağ:** {int(user_data['target_yag'])} Gram")
 # --- ANA EKRAN VE SEKMELER ---
 st.title(f"🥗 {current_username} - Beslenme ve Öğün Takibi")
 
+# YARDIMCI FONKSİYONLAR
 def fetch_product_by_barcode(barcode):
     url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
     try:
@@ -349,6 +332,7 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
+# Sekme tanımları (Admin ise ek 6. sekme görünür)
 tabs_list = ["📝 Öğün Oluştur", "🔍 Barkod Arama", "📷 Etiket Okuma (OCR)", "📊 Günlük Özet & Hedefler", "➕ Ürün Yönetimi"]
 if is_admin:
     tabs_list.append("👑 Admin Paneli")
@@ -537,7 +521,7 @@ with tab5:
             st.success(f"'{custom_name}' eklendi!")
             st.rerun()
 
-# TAB 6: ADMIN PANENİ
+# TAB 6: ADMIN PANENİ (SADECE ADMİN GÖRÜR)
 if is_admin:
     with tabs[5]:
         st.subheader("👑 Admin Paneli - Tüm Kullanıcıların Takip Özeti")
