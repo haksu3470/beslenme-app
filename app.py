@@ -5,12 +5,14 @@ import re
 import json
 import hashlib
 import base64
+import io
 from datetime import datetime, date
 from PIL import Image
 import numpy as np
 import easyocr
 import extra_streamlit_components as stx
 from supabase import create_client, Client
+from google import genai
 
 st.set_page_config(page_title="Beslenme & Öğün Takibi", layout="wide")
 
@@ -478,45 +480,32 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-# AI PORSIYON ANALIZI
+# AI PORSIYON ANALIZI (RESMI GOOGLE-GENAI SDK)
 def analyze_plate_image(image, api_key):
-    import io
-    buffered = io.BytesIO()
-    image.save(buffered, format="JPEG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
+    try:
+        client = genai.Client(api_key=api_key)
+        prompt = (
+            "Bu porsiyon/tabak fotoğrafındaki yiyecekleri analiz et. "
+            "Her yiyecek için tahmini gramajını, kalorisini, proteinini, karbonhidratını ve yağını tespit et. "
+            "Yanıtı SADECE geçerli bir JSON listesi formatında ver. Başka hiçbir metin veya markdown formatı yazma. "
+            "Örnek Format: "
+            '[{"isim": "Pirinç Pilavı", "gramaj": 150, "kalori": 240.0, "protein": 4.0, "karbonhidrat": 42.0, "yag": 6.0}]'
+        )
 
-    prompt = (
-        "Bu porsiyon/tabak fotoğrafındaki yiyecekleri analiz et. "
-        "Her yiyecek için tahmini gramajını, kalorisini, proteinini, karbonhidratını ve yağını tespit et. "
-        "Yanıtı SADECE geçerli bir JSON listesi formatında ver. Başka hiçbir metin veya markdown formatı yazma. "
-        "Örnek Format: "
-        '[{"isim": "Pirinç Pilavı", "gramaj": 150, "kalori": 240.0, "protein": 4.0, "karbonhidrat": 42.0, "yag": 6.0}]'
-    )
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[image, prompt]
+        )
 
-    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
-    for model_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        payload = {
-            "contents": [{
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
-                ]
-            }]
-        }
-        headers = {'Content-Type': 'application/json'}
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=20)
-            if response.status_code == 200:
-                res_json = response.json()
-                raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-                start_idx = raw_text.find("[")
-                end_idx = raw_text.rfind("]")
-                if start_idx != -1 and end_idx != -1:
-                    json_str = raw_text[start_idx:end_idx+1]
-                    return json.loads(json_str)
-        except Exception:
-            continue
+        if response and response.text:
+            raw_text = response.text.strip()
+            start_idx = raw_text.find("[")
+            end_idx = raw_text.rfind("]")
+            if start_idx != -1 and end_idx != -1:
+                json_str = raw_text[start_idx:end_idx+1]
+                return json.loads(json_str)
+    except Exception as e:
+        st.error(f"Görsel analizi sırasında hata oluştu: {e}")
     return None
 
 tabs_list = [
@@ -750,7 +739,6 @@ with tab_plate:
     st.subheader("🍱 Porsiyon / Tabak Fotoğrafından Öğün Çıkarma")
     st.info("Tabağınızın fotoğrafını yükleyin; yapay zeka içerikteki yiyecekleri, gramajları ve besin değerlerini otomatik hesaplasın.")
 
-    # Secrets'tan oku, yoksa girdi kutusu göster
     default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
     gemini_key = st.text_input("Gemini API Anahtarınız", value=default_gemini_key, type="password", key="gemini_api_key_input")
 
@@ -769,8 +757,6 @@ with tab_plate:
                     if parsed_plate:
                         st.session_state["detected_plate_items"] = parsed_plate
                         st.success("Tabak başarıyla analiz edildi!")
-                    else:
-                        st.error("Görsel analiz edilemedi veya yanıt alınamadı. API anahtarını kontrol edin.")
 
     if "detected_plate_items" in st.session_state:
         st.markdown("---")
