@@ -500,16 +500,13 @@ def analyze_plate_image(image, api_key):
     image.save(buffered, format="JPEG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
 
-    prompt = """
-    Bu porsiyon/tabak fotoğrafındaki yiyecekleri analiz et. 
-    Her yiyecek için tahmini gramajını, kalorisini, proteinini, karbonhidratını ve yağını tespit et.
-    Yanıtı SADECE geçerli bir JSON listesi formatında ver. Başka hiçbir metin veya markdown formatı yazma.
-    Örnek Format:
-    [
-      {"isim": "Pirinç Pilavı", "gramaj": 150, "kalori": 240.0, "protein": 4.0, "karbonhidrat": 42.0, "yag": 6.0},
-      {"isim": "Izgara Tavuk Göğsü", "gramaj": 120, "kalori": 198.0, "protein": 37.0, "karbonhidrat": 0.0, "yag": 4.5}
-    ]
-    """
+    prompt = (
+        "Bu porsiyon/tabak fotoğrafındaki yiyecekleri analiz et. "
+        "Her yiyecek için tahmini gramajını, kalorisini, proteinini, karbonhidratını ve yağını tespit et. "
+        "Yanıtı SADECE geçerli bir JSON listesi formatında ver. Başka hiçbir metin veya markdown formatı yazma. "
+        "Örnek Format: "
+        '[{"isim": "Pirinç Pilavı", "gramaj": 150, "kalori": 240.0, "protein": 4.0, "karbonhidrat": 42.0, "yag": 6.0}]'
+    )
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     payload = {
@@ -527,4 +524,4 @@ def analyze_plate_image(image, api_key):
         res_json = response.json()
         try:
             raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-            clean_json = re.sub(r'```json\s*|\s*
+            clean_json = raw_text.replace("```json", "").replace("
