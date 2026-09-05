@@ -157,13 +157,12 @@ if 'db' not in st.session_state:
 
 db = st.session_state.db
 
-# --- OTURUM & ÇEREZ & MOBİL HAFIZA KONTROLÜ ---
+# --- OTURUM & ÇEREZ KONTROLÜ ---
 try:
     saved_user = cookie_manager.get('logged_user')
 except Exception:
     saved_user = None
 
-# Eğer session_state'te veya çerezde varsa otomatik oturum aç
 if 'logged_in' not in st.session_state or not st.session_state.logged_in:
     if 'current_user' in st.session_state and st.session_state.current_user in db["users"]:
         st.session_state.logged_in = True
@@ -183,7 +182,7 @@ def load_ocr():
 if not st.session_state.logged_in:
     st.title("🔐 Beslenme & Öğün Takip - Giriş Portalı")
     
-    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Google ile Hızlı Giriş", "Yeni Hesap Oluştur"], horizontal=True)
+    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Şifremi Unuttum", "Google ile Hızlı Giriş", "Yeni Hesap Oluştur"], horizontal=True)
     
     if choice == "Giriş Yap":
         st.subheader("🔑 Kullanıcı Girişi")
@@ -200,7 +199,6 @@ if not st.session_state.logged_in:
                     
                     if remember_me:
                         try:
-                            # Çerez süresini uzun tutarak kaydet
                             cookie_manager.set('logged_user', username, key='set_user_cookie', expires_at=datetime(2030, 1, 1))
                         except Exception:
                             pass
@@ -211,6 +209,31 @@ if not st.session_state.logged_in:
                     st.error("Hatalı şifre!")
             else:
                 st.error("Kullanıcı bulunamadı!")
+
+    elif choice == "Şifremi Unuttum":
+        st.subheader("🔑 Şifre Sıfırlama")
+        st.info("Kullanıcı adınızı ve profilinizdeki doğrulama bilgilerini girerek yeni şifre belirleyebilirsiniz.")
+        
+        reset_user = st.text_input("Kullanıcı Adınız")
+        col_r1, col_r2 = st.columns(2)
+        verify_yas = col_r1.number_input("Kayıtlı Yaşınız", min_value=15, max_value=90, value=30)
+        verify_boy = col_r2.number_input("Kayıtlı Boyunuz (cm)", min_value=120, max_value=220, value=170)
+        new_pass = st.text_input("Yeni Şifre Belirleyin", type='password')
+
+        if st.button("🔄 Şifremi Güncelle"):
+            if reset_user in db["users"]:
+                u_data = db["users"][reset_user]
+                if int(u_data.get("yas", 0)) == int(verify_yas) and int(u_data.get("boy", 0)) == int(verify_boy):
+                    if new_pass.strip():
+                        u_data["password"] = make_hashes(new_pass)
+                        save_data(db)
+                        st.success("Şifreniz başarıyla güncellendi! 'Giriş Yap' sekmesinden yeni şifrenizle giriş yapabilirsiniz.")
+                    else:
+                        st.error("Lütfen geçerli bir yeni şifre yazın.")
+                else:
+                    st.error("Girdiğiniz yaş ve boy bilgisi sistemdeki kayıtla eşleşmedi!")
+            else:
+                st.error("Bu kullanıcı adıyla kayıtlı hesap bulunamadı.")
 
     elif choice == "Google ile Hızlı Giriş":
         st.subheader("🌐 Google Hesabı İle Giriş Yap")
@@ -423,29 +446,31 @@ with tab1:
     
     col_cat, col_search = st.columns([1, 2])
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
-    selected_cat = col_cat.selectbox("Kategori Filtresi", categories)
-    search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazın)", placeholder="Örn: Bal, Reçel, Zeytin, Menemen...")
+    selected_cat = col_cat.selectbox("Kategori Filtresi", categories, key="cat_filter_select")
+    
+    search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazıp Enter'a basın veya dışarı tıklayın)", value="", key="search_term_input")
 
     filtered_df = food_df.copy()
     if selected_cat != "Tüm Kategoriler":
         filtered_df = filtered_df[filtered_df["kategori"] == selected_cat]
-    if search_term:
-        filtered_df = filtered_df[filtered_df["isim"].str.contains(search_term, case=False, na=False)]
+        
+    if search_term.strip():
+        filtered_df = filtered_df[filtered_df["isim"].str.contains(search_term.strip(), case=False, na=False, regex=False)]
 
     food_list_sorted = filtered_df["isim"].tolist()
 
     if not food_list_sorted:
-        st.warning("Aramanıza uygun ürün bulunamadı. Lütfen farklı bir kelime yazın.")
+        st.warning(f"'{search_term}' aramasına uygun besin bulunamadı. Lütfen kelimeyi kontrol edin veya 'Ürün Yönetimi' sekmesinden ekleyin.")
     else:
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            selected_food_name = st.selectbox(f"Besin Seçin ({len(food_list_sorted)} Ürün Bulundu)", food_list_sorted)
+            selected_food_name = st.selectbox(f"Besin Seçin ({len(food_list_sorted)} Sonuç)", food_list_sorted, key="selected_food_select")
         with col2:
-            gramaj = st.number_input("Gramaj (g)", min_value=1, value=100, step=10)
+            gramaj = st.number_input("Gramaj (g)", min_value=1, value=100, step=10, key="gramaj_input")
         with col3:
-            meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"])
+            meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        if st.button("➕ Öğüne Ekle"):
+        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn"):
             food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
             ratio = gramaj / 100.0
             meal_item = {
@@ -649,6 +674,17 @@ if is_admin:
         st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
         st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
         
+        st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırla (Admin)")
+        admin_new_pass = st.text_input(f"'{selected_view_user}' İçin Yeni Şifre Belirle", type="password")
+        if st.button(f"'{selected_view_user}' Şifresini Değiştir"):
+            if admin_new_pass.strip():
+                u_info["password"] = make_hashes(admin_new_pass)
+                save_data(db)
+                st.success(f"'{selected_view_user}' kullanıcısının şifresi başarıyla değiştirildi!")
+            else:
+                st.error("Lütfen bir şifre girin.")
+
+        st.markdown("---")
         u_hist = u_info.get("history_meals", {})
         if u_hist:
             v_date = st.selectbox("İncelenecek Tarih", sorted(list(u_hist.keys()), reverse=True))
