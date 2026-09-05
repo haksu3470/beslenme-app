@@ -104,14 +104,14 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME ---
+# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME (GÜVENLİ MANTIK) ---
 def parse_unit_gram(food_name):
     if not food_name:
         return 100
     match = re.search(r'~(\d+)\s*g', str(food_name))
     if match:
         val = int(match.group(1))
-        return val if val > 0 else 10
+        return val if val > 0 else 100
     return 100
 
 # --- VERİTABANI İŞLEMLERİ ---
@@ -198,7 +198,6 @@ def load_ocr():
 if not st.session_state.logged_in:
     st.title("🔐 Beslenme & Öğün Takip - Giriş Portalı")
     
-    # Google ile Giriş seçeneği varsayılan (index=0) yapıldı
     choice = st.radio(
         "Lütfen işlem seçin:", 
         ["Google ile Hızlı Giriş", "Kullanıcı Girişi", "Şifremi Unuttum", "Yeni Hesap Oluştur"], 
@@ -517,8 +516,7 @@ if "kategori" not in food_df.columns:
 # CALLBACK: GÜVENLİ GRAMAJ SIFIRLAMA
 def update_gramaj_on_food_change():
     selected_f = st.session_state.get("selected_food_select")
-    if selected_f is not None:
-        st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
+    st.session_state["gramaj_input"] = parse_unit_gram(selected_f) if selected_f else 100
 
 def clear_meal_inputs():
     st.session_state["search_term_input"] = ""
