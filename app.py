@@ -104,6 +104,13 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
+# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI OTOMATİK DOKUMA ---
+def parse_unit_gram(food_name):
+    match = re.search(r'~(\d+)\s*g', food_name)
+    if match:
+        return int(match.group(1))
+    return 100
+
 # --- VERİTABANI İŞLEMLERİ ---
 def load_data():
     db = {
@@ -429,7 +436,6 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-# İLK 3 SEKMEYE İSTENEN YENİ SIRALAMA ENTEGRE EDİLDİ
 tabs_list = [
     "📝 Öğün Oluştur", 
     "📊 Günlük Özet", 
@@ -447,6 +453,11 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
+# ARAMA & GRAMAJ TEMİZLEME FONKSİYONU
+def clear_meal_inputs():
+    st.session_state["search_term_input"] = ""
+    st.session_state["reset_gramaj_flag"] = True
+
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
     st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
@@ -455,12 +466,8 @@ with tab1:
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = col_cat.selectbox("Kategori Filtresi", categories, key="cat_filter_select")
     
-    if "search_query" not in st.session_state:
-        st.session_state.search_query = ""
-
     search_term = col_search.text_input(
         "🔍 Hızlı Besin Ara (Aramak istediğiniz ürünü yazın)", 
-        value=st.session_state.search_query, 
         key="search_term_input",
         placeholder="Örn: Ekmek, Bal, Zeytin, Lavaş, Menemen..."
     )
@@ -480,12 +487,28 @@ with tab1:
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             selected_food_name = st.selectbox(f"Besin Seçin ({len(food_list_sorted)} Sonuç)", food_list_sorted, key="selected_food_select")
+        
+        # Seçilen ürünün varsayılan birim gramajını tespit etme (Örn: ~30g)
+        unit_gram = parse_unit_gram(selected_food_name)
+        
+        # Gramajı resetleme kontrolü
+        if st.session_state.get("reset_gramaj_flag", False) or "gramaj_input" not in st.session_state:
+            st.session_state["gramaj_input"] = unit_gram
+            st.session_state["reset_gramaj_flag"] = False
+
         with col2:
-            gramaj = st.number_input("Gramaj (g)", min_value=1, value=100, step=10, key="gramaj_input")
+            # Artı / eksi adımlarıyla arttırılabilir ve ürün birimiyle gelen gramaj girdisi
+            gramaj = st.number_input(
+                f"Gramaj (+/- {unit_gram}g Adım)", 
+                min_value=1, 
+                step=unit_gram, 
+                key="gramaj_input"
+            )
+
         with col3:
             meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn"):
+        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn", on_click=clear_meal_inputs):
             food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
             ratio = gramaj / 100.0
             meal_item = {
@@ -499,9 +522,7 @@ with tab1:
             }
             current_date_meals.append(meal_item)
             save_data(db)
-            
-            st.session_state.search_query = ""
-            st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi ve arama kutusu temizlendi!")
+            st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
             st.rerun()
 
     st.markdown("---")
