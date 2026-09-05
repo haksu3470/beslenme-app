@@ -108,7 +108,7 @@ DEFAULT_FOOD_DATABASE = [
 def parse_unit_gram(food_name):
     if not food_name:
         return 100
-    match = re.search(r'~(\d+)\s*g', food_name)
+    match = re.search(r'~(\d+)\s*g', str(food_name))
     if match:
         return int(match.group(1))
     return 100
@@ -455,10 +455,10 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# CALLBACK: ÜRÜN VEYA ARAMA DEĞİŞTİĞİNDE VEYA ÖĞÜN EKLENDİĞİNDE HER ŞEYİ SIFIRLA
+# CALLBACK: GÜVENLİ GRAMAJ SIFIRLAMA (NONE KONTROLLERİ EKLENDİ)
 def update_gramaj_on_food_change():
     selected_f = st.session_state.get("selected_food_select")
-    if selected_f:
+    if selected_f is not None:
         st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
 
 def clear_meal_inputs():
@@ -548,7 +548,6 @@ with tab1:
             with st.expander(f"📌 {item['Öğün']} - {item['Besin']} ({item['Gramaj (g)']}g) | {item['Kalori (kcal)']} kcal"):
                 e_col1, e_col2, e_col3 = st.columns([2, 2, 1])
                 
-                # BİRİM GRAMAJIN ADIMLARINA GÖRE DÜZELTME
                 u_step = parse_unit_gram(item['Besin'])
                 new_gramaj = e_col1.number_input(
                     f"Gramaj Düzelt (+/- {u_step}g)", 
@@ -559,12 +558,11 @@ with tab1:
                 )
                 new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
                 
-                # DOĞRU ORANLAMA GÜNCELLEMESİ (100G BAZLI VERİTABANI KONTROLÜ)
                 if e_col3.button("💾 Güncelle", key=f"btn_update_{idx}"):
                     orig_food = food_df[food_df["isim"] == item["Besin"]]
                     if not orig_food.empty:
                         f_row = orig_food.iloc[0]
-                        r = new_gramaj / 100.0  # Veritabanındaki 100g kalori ve makrolar üzerinden tam oranlama
+                        r = new_gramaj / 100.0
                         item["Gramaj (g)"] = new_gramaj
                         item["Öğün"] = new_meal_type
                         item["Kalori (kcal)"] = round(f_row["kalori"] * r, 1)
@@ -572,10 +570,10 @@ with tab1:
                         item["Karbonhidrat (g)"] = round(f_row["karbonhidrat"] * r, 1)
                         item["Yağ (g)"] = round(f_row["yag"] * r, 1)
                         save_data(db)
-                        st.success("Öğün miktarı ve değerleri tam oranlı olarak güncellendi!")
+                        st.success("Öğün miktarı ve değerleri güncellendi!")
                         st.rerun()
 
-                # GÜVENLİ SİLME (ÇİFT AŞAMALI ONAY)
+                # GÜVENLİ SİLME
                 if f"confirm_del_{idx}" not in st.session_state:
                     st.session_state[f"confirm_del_{idx}"] = False
 
@@ -626,7 +624,6 @@ with tab2:
         col_t1, col_t2 = st.columns([4, 1])
         col_t1.subheader(f"📋 {selected_date_str} Yenen Yemekler")
         
-        # TÜM GÜNÜ SIFIRLAMA İÇİN GÜVENLİ SİLME
         if "confirm_clear_day" not in st.session_state:
             st.session_state["confirm_clear_day"] = False
 
@@ -686,48 +683,48 @@ with tab3:
             placeholder="--- Lütfen Bir Ürün Seçin ---"
         )
         
-        food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
-        if food_obj:
-            ed_col1, ed_col2 = st.columns(2)
-            u_name = ed_col1.text_input("Ürün İsmi", value=food_obj["isim"])
-            u_cat = ed_col1.selectbox("Kategori", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
-            u_kal = ed_col2.number_input("Kalori (100g)", value=float(food_obj["kalori"]))
-            u_pro = ed_col2.number_input("Protein (100g)", value=float(food_obj["protein"]))
-            u_karb = ed_col2.number_input("Karbonhidrat (100g)", value=float(food_obj["karbonhidrat"]))
-            u_yag = ed_col2.number_input("Yağ (100g)", value=float(food_obj["yag"]))
+        if selected_edit_food:
+            food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
+            if food_obj:
+                ed_col1, ed_col2 = st.columns(2)
+                u_name = ed_col1.text_input("Ürün İsmi", value=food_obj["isim"])
+                u_cat = ed_col1.selectbox("Kategori", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+                u_kal = ed_col2.number_input("Kalori (100g)", value=float(food_obj["kalori"]))
+                u_pro = ed_col2.number_input("Protein (100g)", value=float(food_obj["protein"]))
+                u_karb = ed_col2.number_input("Karbonhidrat (100g)", value=float(food_obj["karbonhidrat"]))
+                u_yag = ed_col2.number_input("Yağ (100g)", value=float(food_obj["yag"]))
 
-            col_btn1, col_btn2 = st.columns(2)
-            if col_btn1.button("💾 Ürün Değerlerini Güncelle"):
-                food_obj["isim"] = u_name
-                food_obj["kategori"] = u_cat
-                food_obj["kalori"] = u_kal
-                food_obj["protein"] = u_pro
-                food_obj["karbonhidrat"] = u_karb
-                food_obj["yag"] = u_yag
-                save_data(db)
-                st.success(f"'{u_name}' başarıyla güncellendi!")
-                st.rerun()
-
-            # ÜRÜN VERİTABANINDAN SİLME İÇİN GÜVENLİ ÇİFT ONAY
-            if "confirm_del_db_food" not in st.session_state:
-                st.session_state["confirm_del_db_food"] = False
-
-            if not st.session_state["confirm_del_db_food"]:
-                if col_btn2.button("🗑️ Ürünü Veritabanından Sil"):
-                    st.session_state["confirm_del_db_food"] = True
-                    st.rerun()
-            else:
-                st.warning(f"⚠️ '{selected_edit_food}' veritabanından tamamen silinecektir!")
-                d_col1, d_col2 = st.columns(2)
-                if d_col1.button("✅ Evet, Veritabanından Sil"):
-                    db["food_db"] = [f for f in db["food_db"] if f["isim"] != selected_edit_food]
+                col_btn1, col_btn2 = st.columns(2)
+                if col_btn1.button("💾 Ürün Değerlerini Güncelle"):
+                    food_obj["isim"] = u_name
+                    food_obj["kategori"] = u_cat
+                    food_obj["kalori"] = u_kal
+                    food_obj["protein"] = u_pro
+                    food_obj["karbonhidrat"] = u_karb
+                    food_obj["yag"] = u_yag
                     save_data(db)
-                    st.session_state["confirm_del_db_food"] = False
-                    st.success("Ürün veritabanından silindi.")
+                    st.success(f"'{u_name}' başarıyla güncellendi!")
                     st.rerun()
-                if d_col2.button("❌ İptal"):
+
+                if "confirm_del_db_food" not in st.session_state:
                     st.session_state["confirm_del_db_food"] = False
-                    st.rerun()
+
+                if not st.session_state["confirm_del_db_food"]:
+                    if col_btn2.button("🗑️ Ürünü Veritabanından Sil"):
+                        st.session_state["confirm_del_db_food"] = True
+                        st.rerun()
+                else:
+                    st.warning(f"⚠️ '{selected_edit_food}' veritabanından tamamen silinecektir!")
+                    d_col1, d_col2 = st.columns(2)
+                    if d_col1.button("✅ Evet, Veritabanından Sil"):
+                        db["food_db"] = [f for f in db["food_db"] if f["isim"] != selected_edit_food]
+                        save_data(db)
+                        st.session_state["confirm_del_db_food"] = False
+                        st.success("Ürün veritabanından silindi.")
+                        st.rerun()
+                    if d_col2.button("❌ İptal"):
+                        st.session_state["confirm_del_db_food"] = False
+                        st.rerun()
 
 # TAB 4: BARKOD ARAMA
 with tab4:
