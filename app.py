@@ -198,9 +198,45 @@ def load_ocr():
 if not st.session_state.logged_in:
     st.title("🔐 Beslenme & Öğün Takip - Giriş Portalı")
     
-    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Şifremi Unuttum", "Google ile Hızlı Giriş", "Yeni Hesap Oluştur"], horizontal=True)
+    # Google ile Giriş seçeneği varsayılan (index=0) yapıldı
+    choice = st.radio(
+        "Lütfen işlem seçin:", 
+        ["Google ile Hızlı Giriş", "Kullanıcı Girişi", "Şifremi Unuttum", "Yeni Hesap Oluştur"], 
+        index=0, 
+        horizontal=True
+    )
     
-    if choice == "Giriş Yap":
+    if choice == "Google ile Hızlı Giriş":
+        st.subheader("🌐 Google Hesabı İle Giriş Yap")
+        st.info("Google hesabınız ile parola girmeden hızlıca oturum açabilirsiniz.")
+        google_email = st.text_input("Google E-posta Adresiniz (Örn: adiniz@gmail.com)")
+        
+        if st.button("🚀 Google ile Bağlan"):
+            if "@" in google_email and "." in google_email:
+                g_user = google_email.split("@")[0].replace(".", "_")
+                if g_user not in db["users"]:
+                    db["users"][g_user] = {
+                        "password": make_hashes("google_auth_dummy_pwd"),
+                        "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
+                        "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
+                        "target_kalori": 2000.0, "target_protein": 150.0, "target_karb": 200.0, "target_yag": 50.0,
+                        "target_su": 2500,
+                        "history_meals": {},
+                        "history_water": {}
+                    }
+                    save_data(db)
+                st.session_state.logged_in = True
+                st.session_state.current_user = g_user
+                try:
+                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google', expires_at=datetime(2030, 1, 1))
+                except Exception:
+                    pass
+                st.success(f"Google ile oturum açıldı: {google_email}")
+                st.rerun()
+            else:
+                st.error("Geçerli bir e-posta adresi giriniz.")
+
+    elif choice == "Kullanıcı Girişi":
         st.subheader("🔑 Kullanıcı Girişi")
         username = st.text_input("Kullanıcı Adı")
         password = st.text_input("Şifre", type='password')
@@ -243,43 +279,13 @@ if not st.session_state.logged_in:
                     if new_pass.strip():
                         u_data["password"] = make_hashes(new_pass)
                         save_data(db)
-                        st.success("Şifreniz başarıyla güncellendi! 'Giriş Yap' sekmesinden yeni şifrenizle giriş yapabilirsiniz.")
+                        st.success("Şifreniz başarıyla güncellendi! 'Kullanıcı Girişi' sekmesinden yeni şifrenizle giriş yapabilirsiniz.")
                     else:
                         st.error("Lütfen geçerli bir yeni şifre yazın.")
                 else:
                     st.error("Girdiğiniz yaş ve boy bilgisi sistemdeki kayıtla eşleşmedi!")
             else:
                 st.error("Bu kullanıcı adıyla kayıtlı hesap bulunamadı.")
-
-    elif choice == "Google ile Hızlı Giriş":
-        st.subheader("🌐 Google Hesabı İle Giriş Yap")
-        st.info("Google hesabınız ile parola girmeden hızlıca oturum açabilirsiniz.")
-        google_email = st.text_input("Google E-posta Adresiniz (Örn: adiniz@gmail.com)")
-        
-        if st.button("🚀 Google ile Bağlan"):
-            if "@" in google_email and "." in google_email:
-                g_user = google_email.split("@")[0].replace(".", "_")
-                if g_user not in db["users"]:
-                    db["users"][g_user] = {
-                        "password": make_hashes("google_auth_dummy_pwd"),
-                        "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
-                        "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
-                        "target_kalori": 2000.0, "target_protein": 150.0, "target_karb": 200.0, "target_yag": 50.0,
-                        "target_su": 2500,
-                        "history_meals": {},
-                        "history_water": {}
-                    }
-                    save_data(db)
-                st.session_state.logged_in = True
-                st.session_state.current_user = g_user
-                try:
-                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google', expires_at=datetime(2030, 1, 1))
-                except Exception:
-                    pass
-                st.success(f"Google ile oturum açıldı: {google_email}")
-                st.rerun()
-            else:
-                st.error("Geçerli bir e-posta adresi giriniz.")
 
     elif choice == "Yeni Hesap Oluştur":
         st.subheader("📝 Yeni Kullanıcı Kaydı")
@@ -312,7 +318,7 @@ if not st.session_state.logged_in:
                     "history_water": {}
                 }
                 save_data(db)
-                st.success("Hesabınız oluşturuldu! 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
+                st.success("Hesabınız oluşturuldu! Giriş yapabilirsiniz.")
 
     st.stop()
 
