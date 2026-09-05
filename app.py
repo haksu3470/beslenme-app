@@ -104,8 +104,10 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI OTOMATİK DOKUMA ---
+# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME ---
 def parse_unit_gram(food_name):
+    if not food_name:
+        return 100
     match = re.search(r'~(\d+)\s*g', food_name)
     if match:
         return int(match.group(1))
@@ -453,10 +455,15 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# ARAMA & GRAMAJ TEMİZLEME FONKSİYONU
+# ÜRÜN VEYA ÖĞÜN SEÇİMİ DEĞİŞTİĞİNDE GRAMAJI ÜRÜNÜN İLK DEĞERİNE RESETLEYEN CALLBACK
+def update_gramaj_on_food_change():
+    selected_f = st.session_state.get("selected_food_select", "")
+    st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
+
 def clear_meal_inputs():
     st.session_state["search_term_input"] = ""
-    st.session_state["reset_gramaj_flag"] = True
+    selected_f = st.session_state.get("selected_food_select", "")
+    st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
 
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
@@ -486,18 +493,21 @@ with tab1:
     else:
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            selected_food_name = st.selectbox(f"Besin Seçin ({len(food_list_sorted)} Sonuç)", food_list_sorted, key="selected_food_select")
+            # on_change eklenerek ürün her değiştiğinde gramajın temizlenip ürünün ilk birim gramajıyla sıfırlanması sağlandı
+            selected_food_name = st.selectbox(
+                f"Besin Seçin ({len(food_list_sorted)} Sonuç)", 
+                food_list_sorted, 
+                key="selected_food_select",
+                on_change=update_gramaj_on_food_change
+            )
         
-        # Seçilen ürünün varsayılan birim gramajını tespit etme (Örn: ~30g)
         unit_gram = parse_unit_gram(selected_food_name)
         
-        # Gramajı resetleme kontrolü
-        if st.session_state.get("reset_gramaj_flag", False) or "gramaj_input" not in st.session_state:
+        # Eğer henüz başlangıç gramajı ayarlanmamışsa birim gramajla başlat
+        if "gramaj_input" not in st.session_state:
             st.session_state["gramaj_input"] = unit_gram
-            st.session_state["reset_gramaj_flag"] = False
 
         with col2:
-            # Artı / eksi adımlarıyla arttırılabilir ve ürün birimiyle gelen gramaj girdisi
             gramaj = st.number_input(
                 f"Gramaj (+/- {unit_gram}g Adım)", 
                 min_value=1, 
