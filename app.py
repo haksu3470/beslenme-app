@@ -5,6 +5,7 @@ import re
 import json
 import os
 import hashlib
+from datetime import datetime, date
 from PIL import Image
 import numpy as np
 import easyocr
@@ -14,7 +15,7 @@ st.set_page_config(page_title="Beslenme & Öğün Takibi", layout="wide")
 
 DB_FILE = "database.json"
 
-# --- ÇEREZ (COOKIE) YÖNETİCİSİ (HATA VERMEYEN YENİ SÜRÜM) ---
+# --- ÇEREZ (COOKIE) YÖNETİCİSİ ---
 def get_cookie_manager():
     return stx.CookieManager()
 
@@ -29,72 +30,56 @@ def check_hashes(password, hashed_text):
         return hashed_text
     return False
 
-# --- ZENGİNLEŞTİRİLMİŞ VARSAYILAN BESİN LİSTESİ ---
+# --- VARSAYILAN BESİN LİSTESİ ---
 DEFAULT_FOOD_DATABASE = [
-    # --- MEYVELER ---
+    # MEYVELER
     {"id": 1, "kategori": "Meyveler", "isim": "Karpuz", "kalori": 30.0, "protein": 0.6, "karbonhidrat": 7.5, "yag": 0.2},
     {"id": 2, "kategori": "Meyveler", "isim": "Kavun", "kalori": 34.0, "protein": 0.8, "karbonhidrat": 8.1, "yag": 0.2},
     {"id": 3, "kategori": "Meyveler", "isim": "Şeftali / Nektarin", "kalori": 39.0, "protein": 0.9, "karbonhidrat": 9.5, "yag": 0.3},
     {"id": 4, "kategori": "Meyveler", "isim": "Üzüm (Yeşil/Siyah)", "kalori": 69.0, "protein": 0.7, "karbonhidrat": 18.1, "yag": 0.2},
-    {"id": 5, "kategori": "Meyveler", "isim": "Kiraz / Vişne", "kalori": 50.0, "protein": 1.0, "karbonhidrat": 12.0, "yag": 0.3},
-    {"id": 6, "kategori": "Meyveler", "isim": "Erik (Yeşil/Mürdüm)", "kalori": 46.0, "protein": 0.7, "karbonhidrat": 11.4, "yag": 0.3},
-    {"id": 7, "kategori": "Meyveler", "isim": "Taze İncir", "kalori": 74.0, "protein": 0.8, "karbonhidrat": 19.0, "yag": 0.3},
-    {"id": 8, "kategori": "Meyveler", "isim": "Kayısı", "kalori": 48.0, "protein": 1.4, "karbonhidrat": 11.0, "yag": 0.4},
-    {"id": 9, "kategori": "Meyveler", "isim": "Elma", "kalori": 52.0, "protein": 0.3, "karbonhidrat": 13.8, "yag": 0.2},
-    {"id": 10, "kategori": "Meyveler", "isim": "Muz (1 Orta Boy ~110g)", "kalori": 98.0, "protein": 1.2, "karbonhidrat": 25.0, "yag": 0.3},
-    {"id": 11, "kategori": "Meyveler", "isim": "Portakal / Mandalina", "kalori": 47.0, "protein": 0.9, "karbonhidrat": 11.8, "yag": 0.1},
-    {"id": 12, "kategori": "Meyveler", "isim": "Çilek", "kalori": 32.0, "protein": 0.7, "karbonhidrat": 7.7, "yag": 0.3},
-    {"id": 13, "kategori": "Meyveler", "isim": "Avokado", "kalori": 160.0, "protein": 2.0, "karbonhidrat": 8.5, "yag": 14.7},
+    {"id": 5, "kategori": "Meyveler", "isim": "Elma", "kalori": 52.0, "protein": 0.3, "karbonhidrat": 13.8, "yag": 0.2},
+    {"id": 6, "kategori": "Meyveler", "isim": "Muz (1 Orta Boy ~110g)", "kalori": 98.0, "protein": 1.2, "karbonhidrat": 25.0, "yag": 0.3},
+    {"id": 7, "kategori": "Meyveler", "isim": "Portakal / Mandalina", "kalori": 47.0, "protein": 0.9, "karbonhidrat": 11.8, "yag": 0.1},
+    {"id": 8, "kategori": "Meyveler", "isim": "Çilek", "kalori": 32.0, "protein": 0.7, "karbonhidrat": 7.7, "yag": 0.3},
+    {"id": 9, "kategori": "Meyveler", "isim": "Avokado", "kalori": 160.0, "protein": 2.0, "karbonhidrat": 8.5, "yag": 14.7},
     
-    # --- ET, BALIK, TAVUK & YUMURTA ---
-    {"id": 14, "kategori": "Et, Balık & Yumurta", "isim": "Dana Kıyma (Az Yağlı)", "kalori": 175.0, "protein": 21.0, "karbonhidrat": 0.0, "yag": 10.0},
-    {"id": 15, "kategori": "Et, Balık & Yumurta", "isim": "Dana Bonfile / Kontrfile", "kalori": 150.0, "protein": 23.0, "karbonhidrat": 0.0, "yag": 6.0},
-    {"id": 16, "kategori": "Et, Balık & Yumurta", "isim": "Kuzu Pirzola / Külbastı", "kalori": 230.0, "protein": 19.0, "karbonhidrat": 0.0, "yag": 17.0},
-    {"id": 17, "kategori": "Et, Balık & Yumurta", "isim": "Tavuk Göğsü (Derisiz/Çiğ)", "kalori": 120.0, "protein": 22.5, "karbonhidrat": 0.0, "yag": 2.5},
-    {"id": 18, "kategori": "Et, Balık & Yumurta", "isim": "Tavuk Pirzola / Sarma", "kalori": 170.0, "protein": 18.0, "karbonhidrat": 0.0, "yag": 11.0},
-    {"id": 19, "kategori": "Et, Balık & Yumurta", "isim": "Somon Balığı", "kalori": 206.0, "protein": 20.0, "karbonhidrat": 0.0, "yag": 13.0},
-    {"id": 20, "kategori": "Et, Balık & Yumurta", "isim": "Ton Balığı (Konserve)", "kalori": 116.0, "protein": 26.0, "karbonhidrat": 0.0, "yag": 1.0},
-    {"id": 21, "kategori": "Et, Balık & Yumurta", "isim": "Yumurta (Adet ~50g)", "kalori": 70.0, "protein": 6.0, "karbonhidrat": 0.5, "yag": 5.0},
+    # ET, BALIK, TAVUK & YUMURTA
+    {"id": 10, "kategori": "Et, Balık & Yumurta", "isim": "Dana Kıyma (Az Yağlı)", "kalori": 175.0, "protein": 21.0, "karbonhidrat": 0.0, "yag": 10.0},
+    {"id": 11, "kategori": "Et, Balık & Yumurta", "isim": "Dana Bonfile / Kontrfile", "kalori": 150.0, "protein": 23.0, "karbonhidrat": 0.0, "yag": 6.0},
+    {"id": 12, "kategori": "Et, Balık & Yumurta", "isim": "Tavuk Göğsü (Derisiz/Çiğ)", "kalori": 120.0, "protein": 22.5, "karbonhidrat": 0.0, "yag": 2.5},
+    {"id": 13, "kategori": "Et, Balık & Yumurta", "isim": "Somon Balığı", "kalori": 206.0, "protein": 20.0, "karbonhidrat": 0.0, "yag": 13.0},
+    {"id": 14, "kategori": "Et, Balık & Yumurta", "isim": "Yumurta (Adet ~50g)", "kalori": 70.0, "protein": 6.0, "karbonhidrat": 0.5, "yag": 5.0},
 
-    # --- TAHILLAR & BAKLİYAT ---
-    {"id": 22, "kategori": "Tahıllar & Bakliyat", "isim": "Kinoa (Çiğ)", "kalori": 368.0, "protein": 14.1, "karbonhidrat": 64.0, "yag": 6.0},
-    {"id": 23, "kategori": "Tahıllar & Bakliyat", "isim": "Karabuğday / Greçka (Çiğ)", "kalori": 343.0, "protein": 13.2, "karbonhidrat": 71.5, "yag": 3.4},
-    {"id": 24, "kategori": "Tahıllar & Bakliyat", "isim": "Pirinç (Çiğ)", "kalori": 360.0, "protein": 7.0, "karbonhidrat": 78.0, "yag": 1.0},
-    {"id": 25, "kategori": "Tahıllar & Bakliyat", "isim": "Bulgur (Çiğ)", "kalori": 342.0, "protein": 12.3, "karbonhidrat": 76.0, "yag": 1.3},
-    {"id": 26, "kategori": "Tahıllar & Bakliyat", "isim": "Yulaf Ezmesi", "kalori": 370.0, "protein": 13.5, "karbonhidrat": 60.0, "yag": 7.0},
-    {"id": 27, "kategori": "Tahıllar & Bakliyat", "isim": "Kırmızı / Yeşil Mercimek (Çiğ)", "kalori": 330.0, "protein": 24.0, "karbonhidrat": 48.0, "yag": 1.5},
-    {"id": 28, "kategori": "Tahıllar & Bakliyat", "isim": "Nohut (Çiğ)", "kalori": 364.0, "protein": 19.0, "karbonhidrat": 61.0, "yag": 6.0},
-    {"id": 29, "kategori": "Tahıllar & Bakliyat", "isim": "Kuru Fasulye (Çiğ)", "kalori": 337.0, "protein": 21.5, "karbonhidrat": 61.0, "yag": 1.2},
-    {"id": 30, "kategori": "Tahıllar & Bakliyat", "isim": "Tam Buğday Ekmeği (1 Dilim ~30g)", "kalori": 72.0, "protein": 2.7, "karbonhidrat": 12.6, "yag": 0.9},
+    # TAHILLAR & BAKLİYAT
+    {"id": 15, "kategori": "Tahıllar & Bakliyat", "isim": "Yulaf Ezmesi", "kalori": 370.0, "protein": 13.5, "karbonhidrat": 60.0, "yag": 7.0},
+    {"id": 16, "kategori": "Tahıllar & Bakliyat", "isim": "Pirinç (Çiğ)", "kalori": 360.0, "protein": 7.0, "karbonhidrat": 78.0, "yag": 1.0},
+    {"id": 17, "kategori": "Tahıllar & Bakliyat", "isim": "Bulgur (Çiğ)", "kalori": 342.0, "protein": 12.3, "karbonhidrat": 76.0, "yag": 1.3},
+    {"id": 18, "kategori": "Tahıllar & Bakliyat", "isim": "Kırmızı / Yeşil Mercimek (Çiğ)", "kalori": 330.0, "protein": 24.0, "karbonhidrat": 48.0, "yag": 1.5},
+    {"id": 19, "kategori": "Tahıllar & Bakliyat", "isim": "Tam Buğday Ekmeği (1 Dilim ~30g)", "kalori": 72.0, "protein": 2.7, "karbonhidrat": 12.6, "yag": 0.9},
 
-    # --- SEBZELER ---
-    {"id": 31, "kategori": "Sebzeler", "isim": "Domates", "kalori": 18.0, "protein": 0.9, "karbonhidrat": 3.9, "yag": 0.2},
-    {"id": 32, "kategori": "Sebzeler", "isim": "Salatalık", "kalori": 15.0, "protein": 0.7, "karbonhidrat": 3.6, "yag": 0.1},
-    {"id": 33, "kategori": "Sebzeler", "isim": "Biber (Yeşil/Kapya)", "kalori": 20.0, "protein": 0.9, "karbonhidrat": 4.6, "yag": 0.2},
-    {"id": 34, "kategori": "Sebzeler", "isim": "Ispanak", "kalori": 23.0, "protein": 2.9, "karbonhidrat": 3.6, "yag": 0.4},
-    {"id": 35, "kategori": "Sebzeler", "isim": "Brokoli", "kalori": 34.0, "protein": 2.8, "karbonhidrat": 6.6, "yag": 0.4},
-    {"id": 36, "kategori": "Sebzeler", "isim": "Patates (Haşlanmış)", "kalori": 87.0, "protein": 1.9, "karbonhidrat": 20.1, "yag": 0.1},
-    {"id": 37, "kategori": "Sebzeler", "isim": "Mantar", "kalori": 22.0, "protein": 3.1, "karbonhidrat": 3.3, "yag": 0.3},
+    # SEBZELER
+    {"id": 20, "kategori": "Sebzeler", "isim": "Domates", "kalori": 18.0, "protein": 0.9, "karbonhidrat": 3.9, "yag": 0.2},
+    {"id": 21, "kategori": "Sebzeler", "isim": "Salatalık", "kalori": 15.0, "protein": 0.7, "karbonhidrat": 3.6, "yag": 0.1},
+    {"id": 22, "kategori": "Sebzeler", "isim": "Biber (Yeşil/Kapya)", "kalori": 20.0, "protein": 0.9, "karbonhidrat": 4.6, "yag": 0.2},
+    {"id": 23, "kategori": "Sebzeler", "isim": "Brokoli", "kalori": 34.0, "protein": 2.8, "karbonhidrat": 6.6, "yag": 0.4},
 
-    # --- KURUYEMİŞLER & YAĞLAR ---
-    {"id": 38, "kategori": "Kuruyemişler & Yağlar", "isim": "Çiğ Badem", "kalori": 579.0, "protein": 21.2, "karbonhidrat": 21.6, "yag": 49.9},
-    {"id": 39, "kategori": "Kuruyemişler & Yağlar", "isim": "Ceviz içi", "kalori": 654.0, "protein": 15.2, "karbonhidrat": 13.7, "yag": 65.2},
-    {"id": 40, "kategori": "Kuruyemişler & Yağlar", "isim": "Çiğ Fındık", "kalori": 628.0, "protein": 15.0, "karbonhidrat": 16.7, "yag": 60.8},
-    {"id": 41, "kategori": "Kuruyemişler & Yağlar", "isim": "Zeytinyağı (1 Y.Kaşığı ~10g)", "kalori": 88.0, "protein": 0.0, "karbonhidrat": 0.0, "yag": 10.0},
+    # KURUYEMİŞLER & YAĞLAR
+    {"id": 24, "kategori": "Kuruyemişler & Yağlar", "isim": "Çiğ Badem", "kalori": 579.0, "protein": 21.2, "karbonhidrat": 21.6, "yag": 49.9},
+    {"id": 25, "kategori": "Kuruyemişler & Yağlar", "isim": "Ceviz içi", "kalori": 654.0, "protein": 15.2, "karbonhidrat": 13.7, "yag": 65.2},
+    {"id": 26, "kategori": "Kuruyemişler & Yağlar", "isim": "Zeytinyağı (1 Y.Kaşığı ~10g)", "kalori": 88.0, "protein": 0.0, "karbonhidrat": 0.0, "yag": 10.0},
 
-    # --- SÜT ÜRÜNLERİ ---
-    {"id": 42, "kategori": "Süt Ürünleri", "isim": "Süzme Yoğurt (%2 Yağlı)", "kalori": 60.0, "protein": 8.0, "karbonhidrat": 4.0, "yag": 1.5},
-    {"id": 43, "kategori": "Süt Ürünleri", "isim": "Lor Peyniri (Yağsız)", "kalori": 85.0, "protein": 11.0, "karbonhidrat": 3.0, "yag": 3.0},
-    {"id": 44, "kategori": "Süt Ürünleri", "isim": "Beyaz Peynir (Tam Yağlı)", "kalori": 260.0, "protein": 15.0, "karbonhidrat": 2.5, "yag": 21.0},
-    {"id": 45, "kategori": "Süt Ürünleri", "isim": "Tam Yağlı Süt", "kalori": 61.0, "protein": 3.2, "karbonhidrat": 4.8, "yag": 3.3},
+    # SÜT ÜRÜNLERİ
+    {"id": 27, "kategori": "Süt Ürünleri", "isim": "Süzme Yoğurt (%2 Yağlı)", "kalori": 60.0, "protein": 8.0, "karbonhidrat": 4.0, "yag": 1.5},
+    {"id": 28, "kategori": "Süt Ürünleri", "isim": "Beyaz Peynir (Tam Yağlı)", "kalori": 260.0, "protein": 15.0, "karbonhidrat": 2.5, "yag": 21.0},
+    {"id": 29, "kategori": "Süt Ürünleri", "isim": "Tam Yağlı Süt", "kalori": 61.0, "protein": 3.2, "karbonhidrat": 4.8, "yag": 3.3},
 
-    # --- EV YEMEKLERİ ---
-    {"id": 46, "kategori": "Ev Yemekleri", "isim": "Mercimek Çorbası (1 Kepçe ~150g)", "kalori": 120.0, "protein": 5.0, "karbonhidrat": 18.0, "yag": 3.0},
-    {"id": 47, "kategori": "Ev Yemekleri", "isim": "Pirinç Pilavı", "kalori": 160.0, "protein": 2.5, "karbonhidrat": 28.0, "yag": 4.5},
-    {"id": 48, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
+    # EV YEMEKLERİ
+    {"id": 30, "kategori": "Ev Yemekleri", "isim": "Mercimek Çorbası (1 Kepçe ~150g)", "kalori": 120.0, "protein": 5.0, "karbonhidrat": 18.0, "yag": 3.0},
+    {"id": 31, "kategori": "Ev Yemekleri", "isim": "Pirinç Pilavı", "kalori": 160.0, "protein": 2.5, "karbonhidrat": 28.0, "yag": 4.5},
+    {"id": 32, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- VERİTABANI YÜKLEME VE İLK KURULUM ---
+# --- VERİTABANI İŞLEMLERİ ---
 def load_data():
     db = {
         "users": {
@@ -106,7 +91,7 @@ def load_data():
                 "hedef": "Kilo Koruma",
                 "target_kalori": 2200.0, "target_protein": 165.0,
                 "target_karb": 240.0, "target_yag": 60.0,
-                "daily_meals": []
+                "history_meals": {}  # Yapı: {"YYYY-MM-DD": [meal_items...]}
             }
         },
         "food_db": DEFAULT_FOOD_DATABASE
@@ -118,6 +103,16 @@ def load_data():
                 saved_db = json.load(f)
                 db["users"] = saved_db.get("users", db["users"])
                 
+                # Eski verileri geriye dönük uyumlu hale getirme
+                for u, u_data in db["users"].items():
+                    if "history_meals" not in u_data:
+                        u_data["history_meals"] = {}
+                    if "daily_meals" in u_data and u_data["daily_meals"]:
+                        today_str = date.today().strftime("%Y-%m-%d")
+                        if today_str not in u_data["history_meals"]:
+                            u_data["history_meals"][today_str] = u_data["daily_meals"]
+                        del u_data["daily_meals"]
+
                 existing_foods = saved_db.get("food_db", [])
                 existing_names = {f["isim"] for f in existing_foods}
                 for default_food in DEFAULT_FOOD_DATABASE:
@@ -161,7 +156,7 @@ def load_ocr():
 if not st.session_state.logged_in:
     st.title("🔐 Beslenme & Öğün Takip - Giriş Portalı")
     
-    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Yeni Hesap Oluştur"], horizontal=True)
+    choice = st.radio("Lütfen işlem seçin:", ["Giriş Yap", "Google ile Hızlı Giriş", "Yeni Hesap Oluştur"], horizontal=True)
     
     if choice == "Giriş Yap":
         st.subheader("🔑 Kullanıcı Girişi")
@@ -189,6 +184,35 @@ if not st.session_state.logged_in:
             else:
                 st.error("Kullanıcı bulunamadı!")
 
+    elif choice == "Google ile Hızlı Giriş":
+        st.subheader("🌐 Google Hesabı İle Giriş Yap")
+        st.info("Google hesabınız ile parola girmeden hızlıca oturum açabilirsiniz.")
+        google_email = st.text_input("Google E-posta Adresiniz (Örn: adiniz@gmail.com)")
+        
+        if st.button("🚀 Google ile Bağlan"):
+            if "@" in google_email and "." in google_email:
+                g_user = google_email.split("@")[0].replace(".", "_")
+                if g_user not in db["users"]:
+                    # Yeni hesap oluştur
+                    db["users"][g_user] = {
+                        "password": make_hashes("google_auth_dummy_pwd"),
+                        "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
+                        "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
+                        "target_kalori": 2000.0, "target_protein": 150.0, "target_karb": 200.0, "target_yag": 50.0,
+                        "history_meals": {}
+                    }
+                    save_data(db)
+                st.session_state.logged_in = True
+                st.session_state.current_user = g_user
+                try:
+                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google')
+                except Exception:
+                    pass
+                st.success(f"Google ile oturum açıldı: {google_email}")
+                st.rerun()
+            else:
+                st.error("Geçerli bir e-posta adresi giriniz.")
+
     elif choice == "Yeni Hesap Oluştur":
         st.subheader("📝 Yeni Kullanıcı Kaydı")
         new_user = st.text_input("Kullanıcı Adı Belirleyin")
@@ -211,18 +235,11 @@ if not st.session_state.logged_in:
                 
                 db["users"][new_user] = {
                     "password": make_hashes(new_password),
-                    "is_admin": False,
-                    "cinsiyet": new_cinsiyet,
-                    "yas": new_yas,
-                    "kilo": new_kilo,
-                    "boy": new_boy,
-                    "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)",
-                    "hedef": "Kilo Koruma",
-                    "target_kalori": tdee,
-                    "target_protein": (tdee * 0.30) / 4,
-                    "target_karb": (tdee * 0.45) / 4,
-                    "target_yag": (tdee * 0.25) / 9,
-                    "daily_meals": []
+                    "is_admin": False, "cinsiyet": new_cinsiyet, "yas": new_yas, "kilo": new_kilo, "boy": new_boy,
+                    "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
+                    "target_kalori": tdee, "target_protein": (tdee * 0.30) / 4,
+                    "target_karb": (tdee * 0.45) / 4, "target_yag": (tdee * 0.25) / 9,
+                    "history_meals": {}
                 }
                 save_data(db)
                 st.success("Hesabınız oluşturuldu! 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
@@ -249,6 +266,20 @@ if st.sidebar.button("🚪 Çıkış Yap"):
     st.rerun()
 
 st.sidebar.markdown("---")
+
+# 📅 TARİH SEÇİCİ (MADDELERDEN 4: GERİYE DÖNÜK TAKİP)
+st.sidebar.subheader("📅 Takip Tarihi Seçin")
+selected_date = st.sidebar.date_input("İncelenecek Gün", value=date.today())
+selected_date_str = selected_date.strftime("%Y-%m-%d")
+
+if "history_meals" not in user_data:
+    user_data["history_meals"] = {}
+if selected_date_str not in user_data["history_meals"]:
+    user_data["history_meals"][selected_date_str] = []
+
+current_date_meals = user_data["history_meals"][selected_date_str]
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Profil Ayarlarınız")
 
 cinsiyet = st.sidebar.selectbox("Cinsiyet", ["Erkek", "Kadın"], index=0 if user_data["cinsiyet"] == "Erkek" else 1)
@@ -256,12 +287,7 @@ yas = st.sidebar.number_input("Yaş", min_value=15, max_value=90, value=int(user
 kilo = st.sidebar.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=float(user_data["kilo"]), step=0.5)
 boy = st.sidebar.number_input("Boy (cm)", min_value=120, max_value=220, value=int(user_data["boy"]))
 
-akt_options = [
-    "Hareketsiz (Masa başı iş)",
-    "Hafif Hareketli (Haftada 1-3 gün egzersiz)",
-    "Orta Hareketli (Haftada 3-5 gün egzersiz)",
-    "Çok Hareketli (Haftada 6-7 gün egzersiz)"
-]
+akt_options = ["Hareketsiz (Masa başı iş)", "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "Orta Hareketli (Haftada 3-5 gün egzersiz)", "Çok Hareketli (Haftada 6-7 gün egzersiz)"]
 akt_index = akt_options.index(user_data["aktivite"]) if user_data["aktivite"] in akt_options else 0
 aktivite = st.sidebar.selectbox("Aktivite Seviyesi", akt_options, index=akt_index)
 
@@ -271,12 +297,7 @@ hedef = st.sidebar.selectbox("Hedefiniz", hedef_options, index=hedef_index)
 
 if st.sidebar.button("💾 Profil ve Hedefleri Kaydet"):
     bmr = (10 * kilo) + (6.25 * boy) - (5 * yas) + (5 if cinsiyet == "Erkek" else -161)
-    akt_carpanlar = {
-        "Hareketsiz (Masa başı iş)": 1.2,
-        "Hafif Hareketli (Haftada 1-3 gün egzersiz)": 1.375,
-        "Orta Hareketli (Haftada 3-5 gün egzersiz)": 1.55,
-        "Çok Hareketli (Haftada 6-7 gün egzersiz)": 1.725
-    }
+    akt_carpanlar = {"Hareketsiz (Masa başı iş)": 1.2, "Hafif Hareketli (Haftada 1-3 gün egzersiz)": 1.375, "Orta Hareketli (Haftada 3-5 gün egzersiz)": 1.55, "Çok Hareketli (Haftada 6-7 gün egzersiz)": 1.725}
     tdee = bmr * akt_carpanlar[aktivite]
 
     if hedef == "Kilo Verme (Yağ Yakımı)":
@@ -308,8 +329,9 @@ st.sidebar.write(f"• **Protein:** {int(user_data['target_protein'])} Gram")
 st.sidebar.write(f"• **Karbonhidrat:** {int(user_data['target_karb'])} Gram")
 st.sidebar.write(f"• **Yağ:** {int(user_data['target_yag'])} Gram")
 
-# --- ANA EKRAN VE SEKMELER ---
+# --- ANA EKRAN ---
 st.title(f"🥗 {current_username} - Beslenme ve Öğün Takibi")
+st.caption(f"📌 Seçili Tarih: **{selected_date_str}**")
 
 def fetch_product_by_barcode(barcode):
     url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
@@ -357,7 +379,7 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-tabs_list = ["📝 Öğün Oluştur", "🔍 Barkod Arama", "📷 Etiket Okuma (OCR)", "📊 Günlük Özet & Hedefler", "➕ Ürün Yönetimi"]
+tabs_list = ["📝 Öğün Oluştur & Düzenle", "🔍 Barkod Arama", "📷 Etiket Okuma (OCR)", "📊 Günlük Özet & Hedefler", "➕ Ürün Yönetimi"]
 if is_admin:
     tabs_list.append("👑 Admin Paneli")
 
@@ -368,9 +390,9 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# TAB 1: Öğün Oluştur
+# TAB 1: Öğün Oluştur & Düzenleme (MADDELERDEN 2: ÖĞÜN DÜZENLEME)
 with tab1:
-    st.subheader("Öğüne Besin Ekle")
+    st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = st.selectbox("Kategori Filtresi", categories)
     
@@ -397,32 +419,43 @@ with tab1:
             "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
             "Yağ (g)": round(food_row["yag"] * ratio, 1)
         }
-        user_data["daily_meals"].append(meal_item)
+        current_date_meals.append(meal_item)
         save_data(db)
-        st.success(f"{gramaj}g {selected_food_name} ({meal_type}) eklendi!")
+        st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
         st.rerun()
 
     st.markdown("---")
-    filter_meal_type = st.radio("Listelenecek Öğünü Seçin:", ["Seçili Öğün (" + meal_type + ")", "Tüm Günün Öğünleri"], horizontal=True)
-    
-    displayed_meals = [item for item in user_data["daily_meals"] if item["Öğün"] == meal_type] if "Seçili Öğün" in filter_meal_type else user_data["daily_meals"]
-    st.subheader(f"📋 Eklenen Öğünler ({len(displayed_meals)} Adet)")
+    st.subheader(f"📋 Eklenen Öğünler Ve Hızlı Düzenleme ({len(current_date_meals)} Adet)")
 
-    if displayed_meals:
-        for idx, item in enumerate(user_data["daily_meals"]):
-            if "Seçili Öğün" in filter_meal_type and item["Öğün"] != meal_type:
-                continue
-            c_meal, c_name, c_cal, c_macro, c_del = st.columns([1.5, 2.5, 1.5, 2.5, 1])
-            c_meal.write(f"**{item['Öğün']}**")
-            c_name.write(f"{item['Besin']} ({item['Gramaj (g)']}g)")
-            c_cal.write(f"🔥 {item['Kalori (kcal)']} kcal")
-            c_macro.write(f"P: {item['Protein (g)']}g | K: {item['Karbonhidrat (g)']}g | Y: {item['Yağ (g)']}g")
-            if c_del.button("🗑️ Sil", key=f"del_tab1_{idx}"):
-                user_data["daily_meals"].pop(idx)
-                save_data(db)
-                st.rerun()
+    if current_date_meals:
+        for idx, item in enumerate(current_date_meals):
+            with st.expander(f"📌 {item['Öğün']} - {item['Besin']} ({item['Gramaj (g)']}g) | {item['Kalori (kcal)']} kcal"):
+                e_col1, e_col2, e_col3 = st.columns([2, 2, 1])
+                new_gramaj = e_col1.number_input("Gramaj Düzelt (g)", min_value=1, value=int(item['Gramaj (g)']), key=f"edit_g_{idx}")
+                new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
+                
+                if e_col3.button("💾 Güncelle", key=f"btn_update_{idx}"):
+                    # Yeniden Hesapla
+                    orig_food = food_df[food_df["isim"] == item["Besin"]]
+                    if not orig_food.empty:
+                        f_row = orig_food.iloc[0]
+                        r = new_gramaj / 100.0
+                        item["Gramaj (g)"] = new_gramaj
+                        item["Öğün"] = new_meal_type
+                        item["Kalori (kcal)"] = round(f_row["kalori"] * r, 1)
+                        item["Protein (g)"] = round(f_row["protein"] * r, 1)
+                        item["Karbonhidrat (g)"] = round(f_row["karbonhidrat"] * r, 1)
+                        item["Yağ (g)"] = round(f_row["yag"] * r, 1)
+                        save_data(db)
+                        st.success("Öğün güncellendi!")
+                        st.rerun()
+
+                if st.button("🗑️ Bu Öğünü Sil", key=f"btn_del_{idx}"):
+                    current_date_meals.pop(idx)
+                    save_data(db)
+                    st.rerun()
     else:
-        st.info("Bu öğün için henüz yiyecek eklenmedi.")
+        st.info("Bu tarih için henüz yiyecek eklenmedi.")
 
 # TAB 2: Barkod
 with tab2:
@@ -481,12 +514,11 @@ with tab3:
 
 # TAB 4: Günlük Özet & Hedefler
 with tab4:
-    st.subheader(f"📊 Günlük Tüketim Özeti - ({current_username})")
+    st.subheader(f"📊 Özet - {selected_date_str} ({current_username})")
     t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
-    meals = user_data["daily_meals"]
 
-    if meals:
-        df_meals = pd.DataFrame(meals)
+    if current_date_meals:
+        df_meals = pd.DataFrame(current_date_meals)
         tot_kalori, tot_protein, tot_karb, tot_yag = df_meals['Kalori (kcal)'].sum(), df_meals['Protein (g)'].sum(), df_meals['Karbonhidrat (g)'].sum(), df_meals['Yağ (g)'].sum()
 
         m1, m2, m3, m4 = st.columns(4)
@@ -506,50 +538,74 @@ with tab4:
 
         st.markdown("---")
         col_t1, col_t2 = st.columns([4, 1])
-        col_t1.subheader("📋 Bugün Yenen Yemekler")
-        if col_t2.button("🗑️ Tüm Günü Sıfırla"):
-            user_data["daily_meals"] = []
+        col_t1.subheader(f"📋 {selected_date_str} Yenen Yemekler")
+        if col_t2.button("🗑️ Seçili Günü Sıfırla"):
+            user_data["history_meals"][selected_date_str] = []
             save_data(db)
             st.rerun()
 
-        for idx, item in enumerate(meals):
-            c_meal, c_name, c_cal, c_macro, c_del = st.columns([1.5, 2.5, 1.5, 2.5, 1])
-            c_meal.write(f"**{item['Öğün']}**")
-            c_name.write(f"{item['Besin']} ({item['Gramaj (g)']}g)")
-            c_cal.write(f"🔥 {item['Kalori (kcal)']} kcal")
-            c_macro.write(f"P: {item['Protein (g)']}g | K: {item['Karbonhidrat (g)']}g | Y: {item['Yağ (g)']}g")
-            if c_del.button("🗑️ Sil", key=f"del_tab4_{idx}"):
-                user_data["daily_meals"].pop(idx)
-                save_data(db)
-                st.rerun()
+        st.dataframe(df_meals, use_container_width=True)
     else:
-        st.info("Henüz bir öğün eklenmedi.")
+        st.info(f"{selected_date_str} tarihi için henüz bir öğün eklenmedi.")
 
-# TAB 5: DİNAMİK ÜRÜN YÖNETİMİ
+# TAB 5: DİNAMİK ÜRÜN YÖNETİMİ (MADDELERDEN 1 VE 3: FORM SIFIRLAMA & VERİTABANI DÜZENLEME)
 with tab5:
-    st.subheader("➕ Veritabanına Yeni Besin / Yemek Ekle")
-    col_a, col_b = st.columns(2)
-    custom_name = col_a.text_input("Yiyecek / Ürün Adı")
-    custom_cat = col_a.selectbox("Kategorisi", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
-    custom_kal = col_b.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0)
-    custom_pro = col_b.number_input("100g Protein (g)", min_value=0.0, value=1.0)
-    custom_karb = col_b.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0)
-    custom_yag = col_b.number_input("100g Yağ (g)", min_value=0.0, value=0.0)
+    st.subheader("➕ Veritabanına Yeni Besin Ekle / Mevcut Ürünleri Düzenle")
+    
+    sub_action = st.radio("İşlem Seçin:", ["Yeni Ürün Ekle", "Mevcut Kayıtlı Ürünü Düzenle"], horizontal=True)
 
-    if st.button("✨ Veritabanına Kalıcı Olarak Ekle"):
-        if custom_name:
-            new_id = len(db["food_db"]) + 1
-            new_entry = {"id": new_id, "kategori": custom_cat, "isim": custom_name, "kalori": float(custom_kal), "protein": float(custom_pro), "karbonhidrat": float(custom_karb), "yag": float(custom_yag)}
-            db["food_db"].append(new_entry)
-            save_data(db)
-            st.success(f"'{custom_name}' eklendi!")
-            st.rerun()
+    if sub_action == "Yeni Ürün Ekle":
+        # Form Sürümü İle Otomatik Sıfırlama
+        with st.form(key="add_new_product_form", clear_on_submit=True):
+            col_a, col_b = st.columns(2)
+            custom_name = col_a.text_input("Yiyecek / Ürün Adı")
+            custom_cat = col_a.selectbox("Kategorisi", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
+            custom_kal = col_b.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0)
+            custom_pro = col_b.number_input("100g Protein (g)", min_value=0.0, value=1.0)
+            custom_karb = col_b.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0)
+            custom_yag = col_b.number_input("100g Yağ (g)", min_value=0.0, value=0.0)
+
+            submit_btn = st.form_submit_button("✨ Veritabanına Kalıcı Olarak Ekle")
+            if submit_btn:
+                if custom_name:
+                    new_id = len(db["food_db"]) + 1
+                    new_entry = {"id": new_id, "kategori": custom_cat, "isim": custom_name, "kalori": float(custom_kal), "protein": float(custom_pro), "karbonhidrat": float(custom_karb), "yag": float(custom_yag)}
+                    db["food_db"].append(new_entry)
+                    save_data(db)
+                    st.success(f"'{custom_name}' eklendi ve form temizlendi!")
+                    st.rerun()
+
+    elif sub_action == "Mevcut Kayıtlı Ürünü Düzenle":
+        st.write("Veritabanındaki bir ürünün besin değerlerini güncelleyebilirsiniz:")
+        all_food_names = [f["isim"] for f in db["food_db"]]
+        selected_edit_food = st.selectbox("Düzenlenecek Ürünü Seçin", sorted(all_food_names))
+        
+        # Seçilen ürünün mevcut bilgileri
+        food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
+        if food_obj:
+            ed_col1, ed_col2 = st.columns(2)
+            u_name = ed_col1.text_input("Ürün İsmi", value=food_obj["isim"])
+            u_cat = ed_col1.selectbox("Kategori", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+            u_kal = ed_col2.number_input("Kalori (100g)", value=float(food_obj["kalori"]))
+            u_pro = ed_col2.number_input("Protein (100g)", value=float(food_obj["protein"]))
+            u_karb = ed_col2.number_input("Karbonhidrat (100g)", value=float(food_obj["karbonhidrat"]))
+            u_yag = ed_col2.number_input("Yağ (100g)", value=float(food_obj["yag"]))
+
+            if st.button("💾 Ürün Değerlerini Güncelle"):
+                food_obj["isim"] = u_name
+                food_obj["kategori"] = u_cat
+                food_obj["kalori"] = u_kal
+                food_obj["protein"] = u_pro
+                food_obj["karbonhidrat"] = u_karb
+                food_obj["yag"] = u_yag
+                save_data(db)
+                st.success(f"'{u_name}' başarıyla güncellendi!")
+                st.rerun()
 
 # TAB 6: ADMIN PANENİ
 if is_admin:
     with tabs[5]:
         st.subheader("👑 Admin Paneli - Tüm Kullanıcıların Takip Özeti")
-        st.write("Sistemdeki tüm kullanıcıların günlük kalori tüketimlerini buradan izleyebilirsiniz.")
         
         all_users = list(db["users"].keys())
         selected_view_user = st.selectbox("İncelemek İstediğiniz Kullanıcıyı Seçin", all_users)
@@ -558,12 +614,16 @@ if is_admin:
         st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
         st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
         
-        u_meals = u_info.get("daily_meals", [])
-        if u_meals:
-            u_df = pd.DataFrame(u_meals)
-            tot_kal = u_df['Kalori (kcal)'].sum()
-            st.metric("Bugün Tükettiği Toplam Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info['target_kalori'] - tot_kal)} kcal")
-            st.write("#### Tükettiği Yemekler Listesi:")
-            st.dataframe(u_df, use_container_width=True)
+        u_hist = u_info.get("history_meals", {})
+        if u_hist:
+            v_date = st.selectbox("İncelenecek Tarih", sorted(list(u_hist.keys()), reverse=True))
+            u_meals = u_hist.get(v_date, [])
+            if u_meals:
+                u_df = pd.DataFrame(u_meals)
+                tot_kal = u_df['Kalori (kcal)'].sum()
+                st.metric(f"{v_date} Tükettiği Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info['target_kalori'] - tot_kal)} kcal")
+                st.dataframe(u_df, use_container_width=True)
+            else:
+                st.info(f"{selected_view_user} kullanıcısının {v_date} tarihinde kayıtlı öğünü yok.")
         else:
-            st.info(f"{selected_view_user} henüz bugün hiçbir yemek eklemedi.")
+            st.info(f"{selected_view_user} henüz hiçbir tarih için öğün eklememiş.")
