@@ -30,53 +30,78 @@ def check_hashes(password, hashed_text):
         return hashed_text
     return False
 
-# --- VARSAYILAN BESİN LİSTESİ ---
+# --- ZENGİNLEŞTİRİLMİŞ VARSAYILAN BESİN LİSTESİ ---
 DEFAULT_FOOD_DATABASE = [
-    # MEYVELER
-    {"id": 1, "kategori": "Meyveler", "isim": "Karpuz", "kalori": 30.0, "protein": 0.6, "karbonhidrat": 7.5, "yag": 0.2},
-    {"id": 2, "kategori": "Meyveler", "isim": "Kavun", "kalori": 34.0, "protein": 0.8, "karbonhidrat": 8.1, "yag": 0.2},
-    {"id": 3, "kategori": "Meyveler", "isim": "Şeftali / Nektarin", "kalori": 39.0, "protein": 0.9, "karbonhidrat": 9.5, "yag": 0.3},
-    {"id": 4, "kategori": "Meyveler", "isim": "Üzüm (Yeşil/Siyah)", "kalori": 69.0, "protein": 0.7, "karbonhidrat": 18.1, "yag": 0.2},
-    {"id": 5, "kategori": "Meyveler", "isim": "Elma", "kalori": 52.0, "protein": 0.3, "karbonhidrat": 13.8, "yag": 0.2},
-    {"id": 6, "kategori": "Meyveler", "isim": "Muz (1 Orta Boy ~110g)", "kalori": 98.0, "protein": 1.2, "karbonhidrat": 25.0, "yag": 0.3},
-    {"id": 7, "kategori": "Meyveler", "isim": "Portakal / Mandalina", "kalori": 47.0, "protein": 0.9, "karbonhidrat": 11.8, "yag": 0.1},
-    {"id": 8, "kategori": "Meyveler", "isim": "Çilek", "kalori": 32.0, "protein": 0.7, "karbonhidrat": 7.7, "yag": 0.3},
-    {"id": 9, "kategori": "Meyveler", "isim": "Avokado", "kalori": 160.0, "protein": 2.0, "karbonhidrat": 8.5, "yag": 14.7},
-    
-    # ET, BALIK, TAVUK & YUMURTA
-    {"id": 10, "kategori": "Et, Balık & Yumurta", "isim": "Dana Kıyma (Az Yağlı)", "kalori": 175.0, "protein": 21.0, "karbonhidrat": 0.0, "yag": 10.0},
-    {"id": 11, "kategori": "Et, Balık & Yumurta", "isim": "Dana Bonfile / Kontrfile", "kalori": 150.0, "protein": 23.0, "karbonhidrat": 0.0, "yag": 6.0},
-    {"id": 12, "kategori": "Et, Balık & Yumurta", "isim": "Tavuk Göğsü (Derisiz/Çiğ)", "kalori": 120.0, "protein": 22.5, "karbonhidrat": 0.0, "yag": 2.5},
-    {"id": 13, "kategori": "Et, Balık & Yumurta", "isim": "Somon Balığı", "kalori": 206.0, "protein": 20.0, "karbonhidrat": 0.0, "yag": 13.0},
-    {"id": 14, "kategori": "Et, Balık & Yumurta", "isim": "Yumurta (Adet ~50g)", "kalori": 70.0, "protein": 6.0, "karbonhidrat": 0.5, "yag": 5.0},
+    # --- KAHVALTILIKLAR, ZEYTİN & SÜRÜLEBİLİRLER (YENİ KATEGORİ) ---
+    {"id": 1, "kategori": "Kahvaltılıklar", "isim": "Siyah Zeytin (1 Adet ~5g)", "kalori": 115.0, "protein": 0.8, "karbonhidrat": 6.3, "yag": 10.7},
+    {"id": 2, "kategori": "Kahvaltılıklar", "isim": "Yeşil Zeytin (1 Adet ~5g)", "kalori": 145.0, "protein": 1.0, "karbonhidrat": 3.8, "yag": 15.3},
+    {"id": 3, "kategori": "Kahvaltılıklar", "isim": "Süzme / Çiçek Balı (1 Y.Kaşığı ~20g)", "kalori": 304.0, "protein": 0.3, "karbonhidrat": 82.4, "yag": 0.0},
+    {"id": 4, "kategori": "Kahvaltılıklar", "isim": "Reçel Çeşitleri (1 Y.Kaşığı ~20g)", "kalori": 278.0, "protein": 0.4, "karbonhidrat": 69.0, "yag": 0.1},
+    {"id": 5, "kategori": "Kahvaltılıklar", "isim": "Tahin (1 Y.Kaşığı ~15g)", "kalori": 595.0, "protein": 17.0, "karbonhidrat": 21.0, "yag": 53.0},
+    {"id": 6, "kategori": "Kahvaltılıklar", "isim": "Pekmez (Üzüm/Dut) (1 Y.Kaşığı ~20g)", "kalori": 290.0, "protein": 0.0, "karbonhidrat": 74.0, "yag": 0.0},
+    {"id": 7, "kategori": "Kahvaltılıklar", "isim": "Tahin-Pekmez Karışımı (1 Y.Kaşığı ~20g)", "kalori": 420.0, "protein": 7.0, "karbonhidrat": 50.0, "yag": 22.0},
+    {"id": 8, "kategori": "Kahvaltılıklar", "isim": "Kakaolu Fındık Kreması / Nutella (1 Y.Kaşığı ~20g)", "kalori": 539.0, "protein": 6.3, "karbonhidrat": 57.5, "yag": 30.9},
+    {"id": 9, "kategori": "Kahvaltılıklar", "isim": "Fıstık Ezmesi (Şekersiz) (1 Y.Kaşığı ~20g)", "kalori": 588.0, "protein": 25.0, "karbonhidrat": 20.0, "yag": 50.0},
+    {"id": 10, "kategori": "Kahvaltılıklar", "isim": "Kaymak (1 Y.Kaşığı ~20g)", "kalori": 586.0, "protein": 1.2, "karbonhidrat": 2.1, "yag": 63.0},
+    {"id": 11, "kategori": "Kahvaltılıklar", "isim": "Tereyağı (1 Y.Kaşığı ~14g)", "kalori": 717.0, "protein": 0.9, "karbonhidrat": 0.1, "yag": 81.0},
+    {"id": 12, "kategori": "Kahvaltılıklar", "isim": "Dana Sucuk (Pişmiş/Izgara)", "kalori": 330.0, "protein": 14.0, "karbonhidrat": 2.0, "yag": 29.0},
+    {"id": 13, "kategori": "Kahvaltılıklar", "isim": "Pastırma (Çiğ/Çemenli)", "kalori": 250.0, "protein": 29.0, "karbonhidrat": 1.5, "yag": 14.0},
+    {"id": 14, "kategori": "Kahvaltılıklar", "isim": "Hindi Füme", "kalori": 105.0, "protein": 18.0, "karbonhidrat": 1.0, "yag": 3.0},
+    {"id": 15, "kategori": "Kahvaltılıklar", "isim": "Menemen (1 Porsiyon ~200g)", "kalori": 72.0, "protein": 4.5, "karbonhidrat": 3.2, "yag": 4.8},
+    {"id": 16, "kategori": "Kahvaltılıklar", "isim": "Simit (1 Adet ~100g)", "kalori": 320.0, "protein": 10.0, "karbonhidrat": 58.0, "yag": 5.5},
+    {"id": 17, "kategori": "Kahvaltılıklar", "isim": "Peynirli Poğaça (1 Adet ~80g)", "kalori": 360.0, "protein": 8.0, "karbonhidrat": 40.0, "yag": 19.0},
+    {"id": 18, "kategori": "Kahvaltılıklar", "isim": "Pankek (1 Adet ~30g)", "kalori": 227.0, "protein": 6.4, "karbonhidrat": 28.0, "yag": 10.0},
 
-    # TAHILLAR & BAKLİYAT
-    {"id": 15, "kategori": "Tahıllar & Bakliyat", "isim": "Yulaf Ezmesi", "kalori": 370.0, "protein": 13.5, "karbonhidrat": 60.0, "yag": 7.0},
-    {"id": 16, "kategori": "Tahıllar & Bakliyat", "isim": "Pirinç (Çiğ)", "kalori": 360.0, "protein": 7.0, "karbonhidrat": 78.0, "yag": 1.0},
-    {"id": 17, "kategori": "Tahıllar & Bakliyat", "isim": "Bulgur (Çiğ)", "kalori": 342.0, "protein": 12.3, "karbonhidrat": 76.0, "yag": 1.3},
-    {"id": 18, "kategori": "Tahıllar & Bakliyat", "isim": "Kırmızı / Yeşil Mercimek (Çiğ)", "kalori": 330.0, "protein": 24.0, "karbonhidrat": 48.0, "yag": 1.5},
-    {"id": 19, "kategori": "Tahıllar & Bakliyat", "isim": "Tam Buğday Ekmeği (1 Dilim ~30g)", "kalori": 72.0, "protein": 2.7, "karbonhidrat": 12.6, "yag": 0.9},
+    # --- SÜT ÜRÜNLERİ & PEYNİRLER ---
+    {"id": 19, "kategori": "Süt Ürünleri", "isim": "Beyaz Peynir (Tam Yağlı)", "kalori": 260.0, "protein": 15.0, "karbonhidrat": 2.5, "yag": 21.0},
+    {"id": 20, "kategori": "Süt Ürünleri", "isim": "Kaşar Peyniri", "kalori": 350.0, "protein": 25.0, "karbonhidrat": 1.5, "yag": 27.0},
+    {"id": 21, "kategori": "Süt Ürünleri", "isim": "Süzme Peynir", "kalori": 190.0, "protein": 12.0, "karbonhidrat": 2.0, "yag": 15.0},
+    {"id": 22, "kategori": "Süt Ürünleri", "isim": "Hellim Peyniri", "kalori": 320.0, "protein": 21.0, "karbonhidrat": 1.8, "yag": 25.0},
+    {"id": 23, "kategori": "Süt Ürünleri", "isim": "Labne Peyniri", "kalori": 200.0, "protein": 6.0, "karbonhidrat": 4.0, "yag": 18.0},
+    {"id": 24, "kategori": "Süt Ürünleri", "isim": "Lor Peyniri (Yağsız)", "kalori": 85.0, "protein": 11.0, "karbonhidrat": 3.0, "yag": 3.0},
+    {"id": 25, "kategori": "Süt Ürünleri", "isim": "Süzme Yoğurt (%2 Yağlı)", "kalori": 60.0, "protein": 8.0, "karbonhidrat": 4.0, "yag": 1.5},
+    {"id": 26, "kategori": "Süt Ürünleri", "isim": "Tam Yağlı Süt", "kalori": 61.0, "protein": 3.2, "karbonhidrat": 4.8, "yag": 3.3},
 
-    # SEBZELER
-    {"id": 20, "kategori": "Sebzeler", "isim": "Domates", "kalori": 18.0, "protein": 0.9, "karbonhidrat": 3.9, "yag": 0.2},
-    {"id": 21, "kategori": "Sebzeler", "isim": "Salatalık", "kalori": 15.0, "protein": 0.7, "karbonhidrat": 3.6, "yag": 0.1},
-    {"id": 22, "kategori": "Sebzeler", "isim": "Biber (Yeşil/Kapya)", "kalori": 20.0, "protein": 0.9, "karbonhidrat": 4.6, "yag": 0.2},
-    {"id": 23, "kategori": "Sebzeler", "isim": "Brokoli", "kalori": 34.0, "protein": 2.8, "karbonhidrat": 6.6, "yag": 0.4},
+    # --- MEYVELER ---
+    {"id": 27, "kategori": "Meyveler", "isim": "Karpuz", "kalori": 30.0, "protein": 0.6, "karbonhidrat": 7.5, "yag": 0.2},
+    {"id": 28, "kategori": "Meyveler", "isim": "Kavun", "kalori": 34.0, "protein": 0.8, "karbonhidrat": 8.1, "yag": 0.2},
+    {"id": 29, "kategori": "Meyveler", "isim": "Şeftali / Nektarin", "kalori": 39.0, "protein": 0.9, "karbonhidrat": 9.5, "yag": 0.3},
+    {"id": 30, "kategori": "Meyveler", "isim": "Üzüm (Yeşil/Siyah)", "kalori": 69.0, "protein": 0.7, "karbonhidrat": 18.1, "yag": 0.2},
+    {"id": 31, "kategori": "Meyveler", "isim": "Elma", "kalori": 52.0, "protein": 0.3, "karbonhidrat": 13.8, "yag": 0.2},
+    {"id": 32, "kategori": "Meyveler", "isim": "Muz (1 Orta Boy ~110g)", "kalori": 98.0, "protein": 1.2, "karbonhidrat": 25.0, "yag": 0.3},
+    {"id": 33, "kategori": "Meyveler", "isim": "Portakal / Mandalina", "kalori": 47.0, "protein": 0.9, "karbonhidrat": 11.8, "yag": 0.1},
+    {"id": 34, "kategori": "Meyveler", "isim": "Çilek", "kalori": 32.0, "protein": 0.7, "karbonhidrat": 7.7, "yag": 0.3},
+    {"id": 35, "kategori": "Meyveler", "isim": "Avokado", "kalori": 160.0, "protein": 2.0, "karbonhidrat": 8.5, "yag": 14.7},
 
-    # KURUYEMİŞLER & YAĞLAR
-    {"id": 24, "kategori": "Kuruyemişler & Yağlar", "isim": "Çiğ Badem", "kalori": 579.0, "protein": 21.2, "karbonhidrat": 21.6, "yag": 49.9},
-    {"id": 25, "kategori": "Kuruyemişler & Yağlar", "isim": "Ceviz içi", "kalori": 654.0, "protein": 15.2, "karbonhidrat": 13.7, "yag": 65.2},
-    {"id": 26, "kategori": "Kuruyemişler & Yağlar", "isim": "Zeytinyağı (1 Y.Kaşığı ~10g)", "kalori": 88.0, "protein": 0.0, "karbonhidrat": 0.0, "yag": 10.0},
+    # --- ET, BALIK, TAVUK & YUMURTA ---
+    {"id": 36, "kategori": "Et, Balık & Yumurta", "isim": "Dana Kıyma (Az Yağlı)", "kalori": 175.0, "protein": 21.0, "karbonhidrat": 0.0, "yag": 10.0},
+    {"id": 37, "kategori": "Et, Balık & Yumurta", "isim": "Dana Bonfile / Kontrfile", "kalori": 150.0, "protein": 23.0, "karbonhidrat": 0.0, "yag": 6.0},
+    {"id": 38, "kategori": "Et, Balık & Yumurta", "isim": "Tavuk Göğsü (Derisiz/Çiğ)", "kalori": 120.0, "protein": 22.5, "karbonhidrat": 0.0, "yag": 2.5},
+    {"id": 39, "kategori": "Et, Balık & Yumurta", "isim": "Somon Balığı", "kalori": 206.0, "protein": 20.0, "karbonhidrat": 0.0, "yag": 13.0},
+    {"id": 40, "kategori": "Et, Balık & Yumurta", "isim": "Yumurta (Adet ~50g)", "kalori": 70.0, "protein": 6.0, "karbonhidrat": 0.5, "yag": 5.0},
 
-    # SÜT ÜRÜNLERİ
-    {"id": 27, "kategori": "Süt Ürünleri", "isim": "Süzme Yoğurt (%2 Yağlı)", "kalori": 60.0, "protein": 8.0, "karbonhidrat": 4.0, "yag": 1.5},
-    {"id": 28, "kategori": "Süt Ürünleri", "isim": "Beyaz Peynir (Tam Yağlı)", "kalori": 260.0, "protein": 15.0, "karbonhidrat": 2.5, "yag": 21.0},
-    {"id": 29, "kategori": "Süt Ürünleri", "isim": "Tam Yağlı Süt", "kalori": 61.0, "protein": 3.2, "karbonhidrat": 4.8, "yag": 3.3},
+    # --- TAHILLAR & BAKLİYAT ---
+    {"id": 41, "kategori": "Tahıllar & Bakliyat", "isim": "Yulaf Ezmesi", "kalori": 370.0, "protein": 13.5, "karbonhidrat": 60.0, "yag": 7.0},
+    {"id": 42, "kategori": "Tahıllar & Bakliyat", "isim": "Pirinç (Çiğ)", "kalori": 360.0, "protein": 7.0, "karbonhidrat": 78.0, "yag": 1.0},
+    {"id": 43, "kategori": "Tahıllar & Bakliyat", "isim": "Bulgur (Çiğ)", "kalori": 342.0, "protein": 12.3, "karbonhidrat": 76.0, "yag": 1.3},
+    {"id": 44, "kategori": "Tahıllar & Bakliyat", "isim": "Kırmızı / Yeşil Mercimek (Çiğ)", "kalori": 330.0, "protein": 24.0, "karbonhidrat": 48.0, "yag": 1.5},
+    {"id": 45, "kategori": "Tahıllar & Bakliyat", "isim": "Tam Buğday Ekmeği (1 Dilim ~30g)", "kalori": 72.0, "protein": 2.7, "karbonhidrat": 12.6, "yag": 0.9},
 
-    # EV YEMEKLERİ
-    {"id": 30, "kategori": "Ev Yemekleri", "isim": "Mercimek Çorbası (1 Kepçe ~150g)", "kalori": 120.0, "protein": 5.0, "karbonhidrat": 18.0, "yag": 3.0},
-    {"id": 31, "kategori": "Ev Yemekleri", "isim": "Pirinç Pilavı", "kalori": 160.0, "protein": 2.5, "karbonhidrat": 28.0, "yag": 4.5},
-    {"id": 32, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
+    # --- SEBZELER ---
+    {"id": 46, "kategori": "Sebzeler", "isim": "Domates", "kalori": 18.0, "protein": 0.9, "karbonhidrat": 3.9, "yag": 0.2},
+    {"id": 47, "kategori": "Sebzeler", "isim": "Salatalık", "kalori": 15.0, "protein": 0.7, "karbonhidrat": 3.6, "yag": 0.1},
+    {"id": 48, "kategori": "Sebzeler", "isim": "Biber (Yeşil/Kapya)", "kalori": 20.0, "protein": 0.9, "karbonhidrat": 4.6, "yag": 0.2},
+    {"id": 49, "kategori": "Sebzeler", "isim": "Brokoli", "kalori": 34.0, "protein": 2.8, "karbonhidrat": 6.6, "yag": 0.4},
+
+    # --- KURUYEMİŞLER & YAĞLAR ---
+    {"id": 50, "kategori": "Kuruyemişler & Yağlar", "isim": "Çiğ Badem", "kalori": 579.0, "protein": 21.2, "karbonhidrat": 21.6, "yag": 49.9},
+    {"id": 51, "kategori": "Kuruyemişler & Yağlar", "isim": "Ceviz içi", "kalori": 654.0, "protein": 15.2, "karbonhidrat": 13.7, "yag": 65.2},
+    {"id": 52, "kategori": "Kuruyemişler & Yağlar", "isim": "Zeytinyağı (1 Y.Kaşığı ~10g)", "kalori": 88.0, "protein": 0.0, "karbonhidrat": 0.0, "yag": 10.0},
+
+    # --- EV YEMEKLERİ ---
+    {"id": 53, "kategori": "Ev Yemekleri", "isim": "Mercimek Çorbası (1 Kepçe ~150g)", "kalori": 120.0, "protein": 5.0, "karbonhidrat": 18.0, "yag": 3.0},
+    {"id": 54, "kategori": "Ev Yemekleri", "isim": "Pirinç Pilavı", "kalori": 160.0, "protein": 2.5, "karbonhidrat": 28.0, "yag": 4.5},
+    {"id": 55, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
 # --- VERİTABANI İŞLEMLERİ ---
@@ -395,7 +420,7 @@ with tab1:
     col_cat, col_search = st.columns([1, 2])
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = col_cat.selectbox("Kategori Filtresi", categories)
-    search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazın)", placeholder="Örn: Elma, Yumurta, Tavuk...")
+    search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazın)", placeholder="Örn: Bal, Reçel, Zeytin, Menemen...")
 
     # Filtreleme Mantığı
     filtered_df = food_df.copy()
@@ -510,7 +535,7 @@ with tab3:
             c_yag = st.number_input("Yağ (g)", value=p_data['yag'])
             
             new_food_name = st.text_input("Ürün Adı Girin", value="Taranan Ürün")
-            c_kat = st.selectbox("Kategori Seçin", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=7)
+            c_kat = st.selectbox("Kategori Seçin", ["Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
             
             if st.button("Veritabanına Kaydet"):
                 new_id = len(db["food_db"]) + 1
@@ -567,7 +592,7 @@ with tab5:
         with st.form(key="add_new_product_form", clear_on_submit=True):
             col_a, col_b = st.columns(2)
             custom_name = col_a.text_input("Yiyecek / Ürün Adı")
-            custom_cat = col_a.selectbox("Kategorisi", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
+            custom_cat = col_a.selectbox("Kategorisi", ["Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
             custom_kal = col_b.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0)
             custom_pro = col_b.number_input("100g Protein (g)", min_value=0.0, value=1.0)
             custom_karb = col_b.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0)
@@ -592,7 +617,7 @@ with tab5:
         if food_obj:
             ed_col1, ed_col2 = st.columns(2)
             u_name = ed_col1.text_input("Ürün İsmi", value=food_obj["isim"])
-            u_cat = ed_col1.selectbox("Kategori", ["Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+            u_cat = ed_col1.selectbox("Kategori", ["Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
             u_kal = ed_col2.number_input("Kalori (100g)", value=float(food_obj["kalori"]))
             u_pro = ed_col2.number_input("Protein (100g)", value=float(food_obj["protein"]))
             u_karb = ed_col2.number_input("Karbonhidrat (100g)", value=float(food_obj["karbonhidrat"]))
