@@ -455,15 +455,16 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# CALLBACK: ÜRÜN DEĞİŞTİĞİNDE GRAMAJI RESETLEME
+# CALLBACK: ÜRÜN VEYA ARAMA DEĞİŞTİĞİNDE VEYA ÖĞÜN EKLENDİĞİNDE HER ŞEYİ SIFIRLA
 def update_gramaj_on_food_change():
-    selected_f = st.session_state.get("selected_food_select", "")
-    st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
+    selected_f = st.session_state.get("selected_food_select")
+    if selected_f:
+        st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
 
 def clear_meal_inputs():
     st.session_state["search_term_input"] = ""
-    selected_f = st.session_state.get("selected_food_select", "")
-    st.session_state["gramaj_input"] = parse_unit_gram(selected_f)
+    st.session_state["selected_food_select"] = None
+    st.session_state["gramaj_input"] = 100
 
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
@@ -496,11 +497,13 @@ with tab1:
             selected_food_name = st.selectbox(
                 f"Besin Seçin ({len(food_list_sorted)} Sonuç)", 
                 food_list_sorted, 
+                index=None,
+                placeholder="--- Lütfen Bir Besin Seçin ---",
                 key="selected_food_select",
                 on_change=update_gramaj_on_food_change
             )
         
-        unit_gram = parse_unit_gram(selected_food_name)
+        unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         
         if "gramaj_input" not in st.session_state:
             st.session_state["gramaj_input"] = unit_gram
@@ -516,22 +519,26 @@ with tab1:
         with col3:
             meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn", on_click=clear_meal_inputs):
-            food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
-            ratio = gramaj / 100.0
-            meal_item = {
-                "Öğün": meal_type,
-                "Besin": selected_food_name,
-                "Gramaj (g)": gramaj,
-                "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
-                "Protein (g)": round(food_row["protein"] * ratio, 1),
-                "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
-                "Yağ (g)": round(food_row["yag"] * ratio, 1)
-            }
-            current_date_meals.append(meal_item)
-            save_data(db)
-            st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
-            st.rerun()
+        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn"):
+            if not selected_food_name:
+                st.error("Lütfen önce bir besin seçin!")
+            else:
+                food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
+                ratio = gramaj / 100.0
+                meal_item = {
+                    "Öğün": meal_type,
+                    "Besin": selected_food_name,
+                    "Gramaj (g)": gramaj,
+                    "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
+                    "Protein (g)": round(food_row["protein"] * ratio, 1),
+                    "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
+                    "Yağ (g)": round(food_row["yag"] * ratio, 1)
+                }
+                current_date_meals.append(meal_item)
+                save_data(db)
+                clear_meal_inputs()
+                st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
+                st.rerun()
 
     st.markdown("---")
     st.subheader(f"📋 Eklenen Öğünler Ve Hızlı Düzenleme ({len(current_date_meals)} Adet)")
@@ -540,14 +547,24 @@ with tab1:
         for idx, item in enumerate(current_date_meals):
             with st.expander(f"📌 {item['Öğün']} - {item['Besin']} ({item['Gramaj (g)']}g) | {item['Kalori (kcal)']} kcal"):
                 e_col1, e_col2, e_col3 = st.columns([2, 2, 1])
-                new_gramaj = e_col1.number_input("Gramaj Düzelt (g)", min_value=1, value=int(item['Gramaj (g)']), key=f"edit_g_{idx}")
+                
+                # BİRİM GRAMAJIN ADIMLARINA GÖRE DÜZELTME
+                u_step = parse_unit_gram(item['Besin'])
+                new_gramaj = e_col1.number_input(
+                    f"Gramaj Düzelt (+/- {u_step}g)", 
+                    min_value=1, 
+                    value=int(item['Gramaj (g)']), 
+                    step=u_step,
+                    key=f"edit_g_{idx}"
+                )
                 new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
                 
+                # DOĞRU ORANLAMA GÜNCELLEMESİ (100G BAZLI VERİTABANI KONTROLÜ)
                 if e_col3.button("💾 Güncelle", key=f"btn_update_{idx}"):
                     orig_food = food_df[food_df["isim"] == item["Besin"]]
                     if not orig_food.empty:
                         f_row = orig_food.iloc[0]
-                        r = new_gramaj / 100.0
+                        r = new_gramaj / 100.0  # Veritabanındaki 100g kalori ve makrolar üzerinden tam oranlama
                         item["Gramaj (g)"] = new_gramaj
                         item["Öğün"] = new_meal_type
                         item["Kalori (kcal)"] = round(f_row["kalori"] * r, 1)
@@ -555,7 +572,7 @@ with tab1:
                         item["Karbonhidrat (g)"] = round(f_row["karbonhidrat"] * r, 1)
                         item["Yağ (g)"] = round(f_row["yag"] * r, 1)
                         save_data(db)
-                        st.success("Öğün güncellendi!")
+                        st.success("Öğün miktarı ve değerleri tam oranlı olarak güncellendi!")
                         st.rerun()
 
                 # GÜVENLİ SİLME (ÇİFT AŞAMALI ONAY)
@@ -662,7 +679,12 @@ with tab3:
     elif sub_action == "Mevcut Kayıtlı Ürünü Düzenle / Sil":
         st.write("Veritabanındaki bir ürünün besin değerlerini güncelleyebilir veya veritabanından tamamen silebilirsiniz:")
         all_food_names = [f["isim"] for f in db["food_db"]]
-        selected_edit_food = st.selectbox("İşlem Yapılacak Ürünü Seçin", sorted(all_food_names))
+        selected_edit_food = st.selectbox(
+            "İşlem Yapılacak Ürünü Seçin", 
+            sorted(all_food_names),
+            index=None,
+            placeholder="--- Lütfen Bir Ürün Seçin ---"
+        )
         
         food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
         if food_obj:
