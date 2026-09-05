@@ -91,7 +91,7 @@ def load_data():
                 "hedef": "Kilo Koruma",
                 "target_kalori": 2200.0, "target_protein": 165.0,
                 "target_karb": 240.0, "target_yag": 60.0,
-                "history_meals": {}  # Yapı: {"YYYY-MM-DD": [meal_items...]}
+                "history_meals": {}
             }
         },
         "food_db": DEFAULT_FOOD_DATABASE
@@ -103,7 +103,6 @@ def load_data():
                 saved_db = json.load(f)
                 db["users"] = saved_db.get("users", db["users"])
                 
-                # Eski verileri geriye dönük uyumlu hale getirme
                 for u, u_data in db["users"].items():
                     if "history_meals" not in u_data:
                         u_data["history_meals"] = {}
@@ -193,7 +192,6 @@ if not st.session_state.logged_in:
             if "@" in google_email and "." in google_email:
                 g_user = google_email.split("@")[0].replace(".", "_")
                 if g_user not in db["users"]:
-                    # Yeni hesap oluştur
                     db["users"][g_user] = {
                         "password": make_hashes("google_auth_dummy_pwd"),
                         "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
@@ -267,7 +265,7 @@ if st.sidebar.button("🚪 Çıkış Yap"):
 
 st.sidebar.markdown("---")
 
-# 📅 TARİH SEÇİCİ (MADDELERDEN 4: GERİYE DÖNÜK TAKİP)
+# 📅 TARİH SEÇİCİ
 st.sidebar.subheader("📅 Takip Tarihi Seçin")
 selected_date = st.sidebar.date_input("İncelenecek Gün", value=date.today())
 selected_date_str = selected_date.strftime("%Y-%m-%d")
@@ -390,39 +388,51 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# TAB 1: Öğün Oluştur & Düzenleme (MADDELERDEN 2: ÖĞÜN DÜZENLEME)
+# TAB 1: ÖĞÜN OLUŞTUR & CANLI ARAMA
 with tab1:
     st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
-    categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
-    selected_cat = st.selectbox("Kategori Filtresi", categories)
     
-    filtered_df = food_df[food_df["kategori"] == selected_cat] if selected_cat != "Tüm Kategoriler" else food_df
+    col_cat, col_search = st.columns([1, 2])
+    categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
+    selected_cat = col_cat.selectbox("Kategori Filtresi", categories)
+    search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazın)", placeholder="Örn: Elma, Yumurta, Tavuk...")
 
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        food_list_sorted = filtered_df["isim"].tolist()[::-1]
-        selected_food_name = st.selectbox("Besin Seçin", food_list_sorted)
-    with col2:
-        gramaj = st.number_input("Gramaj (g)", min_value=1, value=100, step=10)
-    with col3:
-        meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"])
+    # Filtreleme Mantığı
+    filtered_df = food_df.copy()
+    if selected_cat != "Tüm Kategoriler":
+        filtered_df = filtered_df[filtered_df["kategori"] == selected_cat]
+    if search_term:
+        filtered_df = filtered_df[filtered_df["isim"].str.contains(search_term, case=False, na=False)]
 
-    if st.button("Öğüne Ekle"):
-        food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
-        ratio = gramaj / 100.0
-        meal_item = {
-            "Öğün": meal_type,
-            "Besin": selected_food_name,
-            "Gramaj (g)": gramaj,
-            "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
-            "Protein (g)": round(food_row["protein"] * ratio, 1),
-            "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
-            "Yağ (g)": round(food_row["yag"] * ratio, 1)
-        }
-        current_date_meals.append(meal_item)
-        save_data(db)
-        st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
-        st.rerun()
+    food_list_sorted = filtered_df["isim"].tolist()
+
+    if not food_list_sorted:
+        st.warning("Aramanıza uygun ürün bulunamadı. Lütfen farklı bir kelime yazın.")
+    else:
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            selected_food_name = st.selectbox(f"Besin Seçin ({len(food_list_sorted)} Ürün Bulundu)", food_list_sorted)
+        with col2:
+            gramaj = st.number_input("Gramaj (g)", min_value=1, value=100, step=10)
+        with col3:
+            meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"])
+
+        if st.button("➕ Öğüne Ekle"):
+            food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
+            ratio = gramaj / 100.0
+            meal_item = {
+                "Öğün": meal_type,
+                "Besin": selected_food_name,
+                "Gramaj (g)": gramaj,
+                "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
+                "Protein (g)": round(food_row["protein"] * ratio, 1),
+                "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
+                "Yağ (g)": round(food_row["yag"] * ratio, 1)
+            }
+            current_date_meals.append(meal_item)
+            save_data(db)
+            st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
+            st.rerun()
 
     st.markdown("---")
     st.subheader(f"📋 Eklenen Öğünler Ve Hızlı Düzenleme ({len(current_date_meals)} Adet)")
@@ -435,7 +445,6 @@ with tab1:
                 new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
                 
                 if e_col3.button("💾 Güncelle", key=f"btn_update_{idx}"):
-                    # Yeniden Hesapla
                     orig_food = food_df[food_df["isim"] == item["Besin"]]
                     if not orig_food.empty:
                         f_row = orig_food.iloc[0]
@@ -548,14 +557,13 @@ with tab4:
     else:
         st.info(f"{selected_date_str} tarihi için henüz bir öğün eklenmedi.")
 
-# TAB 5: DİNAMİK ÜRÜN YÖNETİMİ (MADDELERDEN 1 VE 3: FORM SIFIRLAMA & VERİTABANI DÜZENLEME)
+# TAB 5: DİNAMİK ÜRÜN YÖNETİMİ
 with tab5:
     st.subheader("➕ Veritabanına Yeni Besin Ekle / Mevcut Ürünleri Düzenle")
     
     sub_action = st.radio("İşlem Seçin:", ["Yeni Ürün Ekle", "Mevcut Kayıtlı Ürünü Düzenle"], horizontal=True)
 
     if sub_action == "Yeni Ürün Ekle":
-        # Form Sürümü İle Otomatik Sıfırlama
         with st.form(key="add_new_product_form", clear_on_submit=True):
             col_a, col_b = st.columns(2)
             custom_name = col_a.text_input("Yiyecek / Ürün Adı")
@@ -580,7 +588,6 @@ with tab5:
         all_food_names = [f["isim"] for f in db["food_db"]]
         selected_edit_food = st.selectbox("Düzenlenecek Ürünü Seçin", sorted(all_food_names))
         
-        # Seçilen ürünün mevcut bilgileri
         food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
         if food_obj:
             ed_col1, ed_col2 = st.columns(2)
