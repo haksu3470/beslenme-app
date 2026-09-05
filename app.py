@@ -104,7 +104,6 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME (GÜVENLİ MANTIK) ---
 def parse_unit_gram(food_name):
     if not food_name:
         return 100
@@ -114,7 +113,6 @@ def parse_unit_gram(food_name):
         return val if val > 0 else 100
     return 100
 
-# --- VERİTABANI İŞLEMLERİ ---
 def load_data():
     db = {
         "users": {
@@ -173,7 +171,6 @@ if 'db' not in st.session_state:
 
 db = st.session_state.db
 
-# --- OTURUM & ÇEREZ KONTROLÜ ---
 try:
     saved_user = cookie_manager.get('logged_user')
 except Exception:
@@ -189,7 +186,6 @@ if 'logged_in' not in st.session_state or not st.session_state.logged_in:
         st.session_state.logged_in = False
         st.session_state.current_user = None
 
-# --- OCR MODELİ ---
 @st.cache_resource
 def load_ocr():
     return easyocr.Reader(['tr', 'en'])
@@ -513,16 +509,6 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# CALLBACK: GÜVENLİ GRAMAJ SIFIRLAMA
-def update_gramaj_on_food_change():
-    selected_f = st.session_state.get("selected_food_select")
-    st.session_state["gramaj_input"] = parse_unit_gram(selected_f) if selected_f else 100
-
-def clear_meal_inputs():
-    st.session_state["search_term_input"] = ""
-    st.session_state["selected_food_select"] = None
-    st.session_state["gramaj_input"] = 100
-
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
     st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
@@ -556,20 +542,17 @@ with tab1:
                 food_list_sorted, 
                 index=None,
                 placeholder="--- Lütfen Bir Besin Seçin ---",
-                key="selected_food_select",
-                on_change=update_gramaj_on_food_change
+                key="selected_food_select"
             )
         
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
-        
-        if "gramaj_input" not in st.session_state:
-            st.session_state["gramaj_input"] = unit_gram
 
         with col2:
             gramaj = st.number_input(
                 f"Gramaj (+/- {step_val}g Adım)", 
                 min_value=1, 
+                value=unit_gram,
                 step=step_val, 
                 key="gramaj_input"
             )
@@ -594,7 +577,6 @@ with tab1:
                 }
                 current_date_meals.append(meal_item)
                 save_data(db)
-                clear_meal_inputs()
                 st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
                 st.rerun()
 
