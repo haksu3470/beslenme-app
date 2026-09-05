@@ -137,8 +137,16 @@ def load_data():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 saved_db = json.load(f)
-                db["users"] = saved_db.get("users", db["users"])
                 
+                # Kullanıcıları yükle
+                if "users" in saved_db:
+                    for u, u_data in saved_db["users"].items():
+                        if u not in db["users"]:
+                            db["users"][u] = u_data
+                        else:
+                            db["users"][u].update(u_data)
+
+                # Geçmiş verileri düzelt/uyarla
                 for u, u_data in db["users"].items():
                     if "history_meals" not in u_data:
                         u_data["history_meals"] = {}
@@ -146,18 +154,21 @@ def load_data():
                         u_data["history_water"] = {}
                     if "target_su" not in u_data:
                         u_data["target_su"] = 2500
+                        
+                    # Eski 'daily_meals' anahtarı varsa history_meals'a aktar
                     if "daily_meals" in u_data and u_data["daily_meals"]:
                         today_str = date.today().strftime("%Y-%m-%d")
                         if today_str not in u_data["history_meals"]:
                             u_data["history_meals"][today_str] = u_data["daily_meals"]
-                        del u_data["daily_meals"]
 
+                # Veritabanındaki ürünleri yükle
                 existing_foods = saved_db.get("food_db", [])
-                existing_names = {f["isim"] for f in existing_foods}
-                for default_food in DEFAULT_FOOD_DATABASE:
-                    if default_food["isim"] not in existing_names:
-                        existing_foods.append(default_food)
-                db["food_db"] = existing_foods
+                if existing_foods:
+                    existing_names = {f["isim"] for f in existing_foods}
+                    for default_food in DEFAULT_FOOD_DATABASE:
+                        if default_food["isim"] not in existing_names:
+                            existing_foods.append(default_food)
+                    db["food_db"] = existing_foods
         except Exception:
             pass
             
@@ -167,9 +178,8 @@ def save_data(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-if 'db' not in st.session_state:
-    st.session_state.db = load_data()
-
+# Her çalıştırmada veri güncellemesini tazele
+st.session_state.db = load_data()
 db = st.session_state.db
 
 try:
@@ -393,18 +403,20 @@ if st.sidebar.button("💧 Su Miktarını Güncelle"):
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Profil Ayarlarınız")
 
-cinsiyet = st.sidebar.selectbox("Cinsiyet", ["Erkek", "Kadın"], index=0 if user_data["cinsiyet"] == "Erkek" else 1)
-yas = st.sidebar.number_input("Yaş", min_value=15, max_value=90, value=int(user_data["yas"]))
-kilo = st.sidebar.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=float(user_data["kilo"]), step=0.5)
-boy = st.sidebar.number_input("Boy (cm)", min_value=120, max_value=220, value=int(user_data["boy"]))
+cinsiyet = st.sidebar.selectbox("Cinsiyet", ["Erkek", "Kadın"], index=0 if user_data.get("cinsiyet", "Erkek") == "Erkek" else 1)
+yas = st.sidebar.number_input("Yaş", min_value=15, max_value=90, value=int(user_data.get("yas", 30)))
+kilo = st.sidebar.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=float(user_data.get("kilo", 70.0)), step=0.5)
+boy = st.sidebar.number_input("Boy (cm)", min_value=120, max_value=220, value=int(user_data.get("boy", 170)))
 new_target_su = st.sidebar.number_input("Hedef Su Miktarı (ml)", min_value=500, max_value=10000, value=int(target_su), step=250)
 
 akt_options = ["Hareketsiz (Masa başı iş)", "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "Orta Hareketli (Haftada 3-5 gün egzersiz)", "Çok Hareketli (Haftada 6-7 gün egzersiz)"]
-akt_index = akt_options.index(user_data["aktivite"]) if user_data["aktivite"] in akt_options else 0
+akt_val = user_data.get("aktivite", akt_options[1])
+akt_index = akt_options.index(akt_val) if akt_val in akt_options else 1
 aktivite = st.sidebar.selectbox("Aktivite Seviyesi", akt_options, index=akt_index)
 
 hedef_options = ["Kilo Verme (Yağ Yakımı)", "Kilo Koruma", "Kilo Alma / Kas Yapma"]
-hedef_index = hedef_options.index(user_data["hedef"]) if user_data["hedef"] in hedef_options else 0
+hedef_val = user_data.get("hedef", hedef_options[1])
+hedef_index = hedef_options.index(hedef_val) if hedef_val in hedef_options else 1
 hedef = st.sidebar.selectbox("Hedefiniz", hedef_options, index=hedef_index)
 
 if st.sidebar.button("💾 Profil ve Hedefleri Kaydet"):
@@ -437,10 +449,10 @@ if st.sidebar.button("💾 Profil ve Hedefleri Kaydet"):
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 Günlük Hedefleriniz")
-st.sidebar.write(f"• **Kalori:** {int(user_data['target_kalori'])} kcal")
-st.sidebar.write(f"• **Protein:** {int(user_data['target_protein'])} Gram")
-st.sidebar.write(f"• **Karbonhidrat:** {int(user_data['target_karb'])} Gram")
-st.sidebar.write(f"• **Yağ:** {int(user_data['target_yag'])} Gram")
+st.sidebar.write(f"• **Kalori:** {int(user_data.get('target_kalori', 2000))} kcal")
+st.sidebar.write(f"• **Protein:** {int(user_data.get('target_protein', 150))} Gram")
+st.sidebar.write(f"• **Karbonhidrat:** {int(user_data.get('target_karb', 200))} Gram")
+st.sidebar.write(f"• **Yağ:** {int(user_data.get('target_yag', 50))} Gram")
 st.sidebar.write(f"• **Su:** {user_data.get('target_su', 2500)} ml")
 
 # --- ANA EKRAN ---
@@ -525,7 +537,6 @@ def analyze_plate_image(image, api_key):
         try:
             raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
             
-            # GÜVENLİ DÜZELTME: Markdown bloklarını güvenle temizle
             start_idx = raw_text.find("[")
             end_idx = raw_text.rfind("]")
             
@@ -686,7 +697,10 @@ with tab1:
 # TAB 2: GÜNLÜK ÖZET & HEDEFLER
 with tab2:
     st.subheader(f"📊 Özet - {selected_date_str} ({current_username})")
-    t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
+    t_kal = user_data.get("target_kalori", 2000.0)
+    t_pro = user_data.get("target_protein", 150.0)
+    t_karb = user_data.get("target_karb", 200.0)
+    t_yag = user_data.get("target_yag", 50.0)
 
     # SU ÖZETİ METRİĞİ
     su_metrik_col1, su_metrik_col2 = st.columns([3, 1])
@@ -696,7 +710,10 @@ with tab2:
 
     if current_date_meals:
         df_meals = pd.DataFrame(current_date_meals)
-        tot_kalori, tot_protein, tot_karb, tot_yag = df_meals['Kalori (kcal)'].sum(), df_meals['Protein (g)'].sum(), df_meals['Karbonhidrat (g)'].sum(), df_meals['Yağ (g)'].sum()
+        tot_kalori = df_meals['Kalori (kcal)'].sum() if 'Kalori (kcal)' in df_meals.columns else 0.0
+        tot_protein = df_meals['Protein (g)'].sum() if 'Protein (g)' in df_meals.columns else 0.0
+        tot_karb = df_meals['Karbonhidrat (g)'].sum() if 'Karbonhidrat (g)' in df_meals.columns else 0.0
+        tot_yag = df_meals['Yağ (g)'].sum() if 'Yağ (g)' in df_meals.columns else 0.0
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Alınan Kalori", f"{tot_kalori:.1f} kcal", f"Kalan: {int(t_kal - tot_kalori)} kcal")
@@ -936,7 +953,7 @@ if is_admin:
         
         u_info = db["users"][selected_view_user]
         st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
-        st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
+        st.write(f"• **Hedef Kalori:** {int(u_info.get('target_kalori', 2000))} kcal | **Hedef Protein:** {int(u_info.get('target_protein', 150))}g")
         st.write(f"• **Hedef Su:** {u_info.get('target_su', 2500)} ml")
 
         st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırla (Admin)")
@@ -964,8 +981,8 @@ if is_admin:
             
             if u_meals:
                 u_df = pd.DataFrame(u_meals)
-                tot_kal = u_df['Kalori (kcal)'].sum()
-                st.metric(f"{v_date} Tükettiği Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info['target_kalori'] - tot_kal)} kcal")
+                tot_kal = u_df['Kalori (kcal)'].sum() if 'Kalori (kcal)' in u_df.columns else 0.0
+                st.metric(f"{v_date} Tükettiği Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info.get('target_kalori', 2000) - tot_kal)} kcal")
                 st.dataframe(u_df, use_container_width=True)
             else:
                 st.info(f"{selected_view_user} kullanıcısının {v_date} tarihinde kayıtlı öğünü yok.")
