@@ -104,7 +104,7 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME (GÜVENLİ PARSER) ---
+# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME ---
 def parse_unit_gram(food_name):
     if not food_name:
         return 100
@@ -126,7 +126,9 @@ def load_data():
                 "hedef": "Kilo Koruma",
                 "target_kalori": 2200.0, "target_protein": 165.0,
                 "target_karb": 240.0, "target_yag": 60.0,
-                "history_meals": {}
+                "target_su": 2500,
+                "history_meals": {},
+                "history_water": {}
             }
         },
         "food_db": DEFAULT_FOOD_DATABASE
@@ -141,6 +143,10 @@ def load_data():
                 for u, u_data in db["users"].items():
                     if "history_meals" not in u_data:
                         u_data["history_meals"] = {}
+                    if "history_water" not in u_data:
+                        u_data["history_water"] = {}
+                    if "target_su" not in u_data:
+                        u_data["target_su"] = 2500
                     if "daily_meals" in u_data and u_data["daily_meals"]:
                         today_str = date.today().strftime("%Y-%m-%d")
                         if today_str not in u_data["history_meals"]:
@@ -259,7 +265,9 @@ if not st.session_state.logged_in:
                         "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
                         "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
                         "target_kalori": 2000.0, "target_protein": 150.0, "target_karb": 200.0, "target_yag": 50.0,
-                        "history_meals": {}
+                        "target_su": 2500,
+                        "history_meals": {},
+                        "history_water": {}
                     }
                     save_data(db)
                 st.session_state.logged_in = True
@@ -299,7 +307,9 @@ if not st.session_state.logged_in:
                     "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
                     "target_kalori": tdee, "target_protein": (tdee * 0.30) / 4,
                     "target_karb": (tdee * 0.45) / 4, "target_yag": (tdee * 0.25) / 9,
-                    "history_meals": {}
+                    "target_su": int(new_kilo * 35),
+                    "history_meals": {},
+                    "history_water": {}
                 }
                 save_data(db)
                 st.success("Hesabınız oluşturuldu! 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
@@ -334,10 +344,49 @@ selected_date_str = selected_date.strftime("%Y-%m-%d")
 
 if "history_meals" not in user_data:
     user_data["history_meals"] = {}
+if "history_water" not in user_data:
+    user_data["history_water"] = {}
+
 if selected_date_str not in user_data["history_meals"]:
     user_data["history_meals"][selected_date_str] = []
+if selected_date_str not in user_data["history_water"]:
+    user_data["history_water"][selected_date_str] = 0
 
 current_date_meals = user_data["history_meals"][selected_date_str]
+current_date_water = user_data["history_water"][selected_date_str]
+
+# 💧 SU TAKİBİ MODÜLÜ (SIDEBAR)
+st.sidebar.markdown("---")
+st.sidebar.subheader("💧 Günlük Su Takibi")
+target_su = user_data.get("target_su", 2500)
+su_litre = current_date_water / 1000.0
+target_litre = target_su / 1000.0
+
+st.sidebar.write(f"**İçilen:** {current_date_water} ml ({su_litre:.2f} L)")
+st.sidebar.write(f"**Hedef:** {target_su} ml ({target_litre:.2f} L)")
+st.sidebar.progress(min(current_date_water / target_su, 1.0) if target_su > 0 else 0.0)
+
+w_col1, w_col2, w_col3 = st.sidebar.columns(3)
+if w_col1.button("🥤+250ml"):
+    user_data["history_water"][selected_date_str] += 250
+    save_data(db)
+    st.rerun()
+
+if w_col2.button("🥛+500ml"):
+    user_data["history_water"][selected_date_str] += 500
+    save_data(db)
+    st.rerun()
+
+if w_col3.button("🍼+1L"):
+    user_data["history_water"][selected_date_str] += 1000
+    save_data(db)
+    st.rerun()
+
+w_custom = st.sidebar.number_input("Özel Miktar Ekle/Çıkar (ml)", value=0, step=50, key="custom_water_input")
+if st.sidebar.button("💧 Su Miktarını Güncelle"):
+    user_data["history_water"][selected_date_str] = max(0, user_data["history_water"][selected_date_str] + w_custom)
+    save_data(db)
+    st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Profil Ayarlarınız")
@@ -346,6 +395,7 @@ cinsiyet = st.sidebar.selectbox("Cinsiyet", ["Erkek", "Kadın"], index=0 if user
 yas = st.sidebar.number_input("Yaş", min_value=15, max_value=90, value=int(user_data["yas"]))
 kilo = st.sidebar.number_input("Kilo (kg)", min_value=30.0, max_value=200.0, value=float(user_data["kilo"]), step=0.5)
 boy = st.sidebar.number_input("Boy (cm)", min_value=120, max_value=220, value=int(user_data["boy"]))
+new_target_su = st.sidebar.number_input("Hedef Su Miktarı (ml)", min_value=500, max_value=10000, value=int(target_su), step=250)
 
 akt_options = ["Hareketsiz (Masa başı iş)", "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "Orta Hareketli (Haftada 3-5 gün egzersiz)", "Çok Hareketli (Haftada 6-7 gün egzersiz)"]
 akt_index = akt_options.index(user_data["aktivite"]) if user_data["aktivite"] in akt_options else 0
@@ -377,6 +427,7 @@ if st.sidebar.button("💾 Profil ve Hedefleri Kaydet"):
     user_data["target_protein"] = (calc_kalori * 0.30) / 4
     user_data["target_karb"] = (calc_kalori * 0.45) / 4
     user_data["target_yag"] = (calc_kalori * 0.25) / 9
+    user_data["target_su"] = new_target_su
 
     save_data(db)
     st.sidebar.success("Profil Kaydedildi!")
@@ -388,6 +439,7 @@ st.sidebar.write(f"• **Kalori:** {int(user_data['target_kalori'])} kcal")
 st.sidebar.write(f"• **Protein:** {int(user_data['target_protein'])} Gram")
 st.sidebar.write(f"• **Karbonhidrat:** {int(user_data['target_karb'])} Gram")
 st.sidebar.write(f"• **Yağ:** {int(user_data['target_yag'])} Gram")
+st.sidebar.write(f"• **Su:** {user_data.get('target_su', 2500)} ml")
 
 # --- ANA EKRAN ---
 st.title(f"🥗 {current_username} - Beslenme ve Öğün Takibi")
@@ -504,7 +556,6 @@ with tab1:
                 on_change=update_gramaj_on_food_change
             )
         
-        # BİRİM ADIMINI BEYAZ PEYNİR GİBİ PARANTEZSİZ ÜRÜNLER İÇİN EN AZ 10G YAPMA
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
         
@@ -604,6 +655,12 @@ with tab1:
 with tab2:
     st.subheader(f"📊 Özet - {selected_date_str} ({current_username})")
     t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
+
+    # SU ÖZETİ METRİĞİ
+    su_metrik_col1, su_metrik_col2 = st.columns([3, 1])
+    su_metrik_col1.metric("💧 İçilen Su Miktarı", f"{current_date_water} ml", f"Hedef: {target_su} ml ({int(target_su - current_date_water)} ml Kalan)")
+
+    st.markdown("---")
 
     if current_date_meals:
         df_meals = pd.DataFrame(current_date_meals)
@@ -796,7 +853,8 @@ if is_admin:
         u_info = db["users"][selected_view_user]
         st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
         st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
-        
+        st.write(f"• **Hedef Su:** {u_info.get('target_su', 2500)} ml")
+
         st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırla (Admin)")
         admin_new_pass = st.text_input(f"'{selected_view_user}' İçin Yeni Şifre Belirle", type="password")
         if st.button(f"'{selected_view_user}' Şifresini Değiştir"):
@@ -809,9 +867,17 @@ if is_admin:
 
         st.markdown("---")
         u_hist = u_info.get("history_meals", {})
-        if u_hist:
-            v_date = st.selectbox("İncelenecek Tarih", sorted(list(u_hist.keys()), reverse=True))
+        u_water_hist = u_info.get("history_water", {})
+        
+        if u_hist or u_water_hist:
+            all_dates = sorted(list(set(list(u_hist.keys()) + list(u_water_hist.keys()))), reverse=True)
+            v_date = st.selectbox("İncelenecek Tarih", all_dates)
+            
             u_meals = u_hist.get(v_date, [])
+            u_water = u_water_hist.get(v_date, 0)
+            
+            st.write(f"💧 **{v_date} Tüketilen Su:** {u_water} ml")
+            
             if u_meals:
                 u_df = pd.DataFrame(u_meals)
                 tot_kal = u_df['Kalori (kcal)'].sum()
