@@ -104,13 +104,14 @@ DEFAULT_FOOD_DATABASE = [
     {"id": 53, "kategori": "Ev Yemekleri", "isim": "Izgara Köfte", "kalori": 200.0, "protein": 18.0, "karbonhidrat": 3.0, "yag": 12.0},
 ]
 
-# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME ---
+# --- ÜRÜN İSMİNDEN BİRİM GRAMAJINI PARSE ETME (GÜVENLİ PARSER) ---
 def parse_unit_gram(food_name):
     if not food_name:
         return 100
     match = re.search(r'~(\d+)\s*g', str(food_name))
     if match:
-        return int(match.group(1))
+        val = int(match.group(1))
+        return val if val > 0 else 10
     return 100
 
 # --- VERİTABANI İŞLEMLERİ ---
@@ -455,7 +456,7 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# CALLBACK: GÜVENLİ GRAMAJ SIFIRLAMA (NONE KONTROLLERİ EKLENDİ)
+# CALLBACK: GÜVENLİ GRAMAJ SIFIRLAMA
 def update_gramaj_on_food_change():
     selected_f = st.session_state.get("selected_food_select")
     if selected_f is not None:
@@ -503,16 +504,18 @@ with tab1:
                 on_change=update_gramaj_on_food_change
             )
         
+        # BİRİM ADIMINI BEYAZ PEYNİR GİBİ PARANTEZSİZ ÜRÜNLER İÇİN EN AZ 10G YAPMA
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
+        step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
         
         if "gramaj_input" not in st.session_state:
             st.session_state["gramaj_input"] = unit_gram
 
         with col2:
             gramaj = st.number_input(
-                f"Gramaj (+/- {unit_gram}g Adım)", 
+                f"Gramaj (+/- {step_val}g Adım)", 
                 min_value=1, 
-                step=unit_gram, 
+                step=step_val, 
                 key="gramaj_input"
             )
 
@@ -549,11 +552,12 @@ with tab1:
                 e_col1, e_col2, e_col3 = st.columns([2, 2, 1])
                 
                 u_step = parse_unit_gram(item['Besin'])
+                u_step_val = u_step if u_step in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
                 new_gramaj = e_col1.number_input(
-                    f"Gramaj Düzelt (+/- {u_step}g)", 
+                    f"Gramaj Düzelt (+/- {u_step_val}g)", 
                     min_value=1, 
                     value=int(item['Gramaj (g)']), 
-                    step=u_step,
+                    step=u_step_val,
                     key=f"edit_g_{idx}"
                 )
                 new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
