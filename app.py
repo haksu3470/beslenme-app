@@ -480,7 +480,7 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-# AI PORSIYON ANALIZI (RESMI GOOGLE-GENAI SDK)
+# AI PORSIYON ANALIZI (GÜNCEL GEMINI-3.6-FLASH MODELI)
 def analyze_plate_image(image, api_key):
     try:
         client = genai.Client(api_key=api_key)
@@ -493,7 +493,7 @@ def analyze_plate_image(image, api_key):
         )
 
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=[image, prompt]
         )
 
