@@ -5,3 +5,4 @@ pillow
 easyocr
 extra-streamlit-components
 supabase
+google-genai
