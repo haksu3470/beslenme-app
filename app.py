@@ -32,7 +32,7 @@ def check_hashes(password, hashed_text):
 
 # --- ZENGİNLEŞTİRİLMİŞ VARSAYILAN BESİN LİSTESİ ---
 DEFAULT_FOOD_DATABASE = [
-    # --- EKMEK & UNLU MAMULLER (YENİ VE ZENGİN KATEGORİ) ---
+    # --- EKMEK & UNLU MAMULLER ---
     {"id": 1, "kategori": "Ekmek & Unlu Mamuller", "isim": "Beyaz Somun Ekmek (1 Dilim ~30g)", "kalori": 79.0, "protein": 2.6, "karbonhidrat": 15.0, "yag": 0.8},
     {"id": 2, "kategori": "Ekmek & Unlu Mamuller", "isim": "Tam Buğday Ekmeği (1 Dilim ~30g)", "kalori": 72.0, "protein": 2.7, "karbonhidrat": 12.6, "yag": 0.9},
     {"id": 3, "kategori": "Ekmek & Unlu Mamuller", "isim": "Çavdar Ekmeği (1 Dilim ~30g)", "kalori": 68.0, "protein": 2.5, "karbonhidrat": 13.0, "yag": 0.6},
@@ -429,13 +429,13 @@ def parse_nutrition_text(text_list):
 
     return extracted
 
-# MADDELERDEN 3: MENÜ ŞERİDİ ERGONOMİSİ VE SEKMELERİN KOLAY ULAŞILABİLİRLİĞİ
+# İLK 3 SEKMEYE İSTENEN YENİ SIRALAMA ENTEGRE EDİLDİ
 tabs_list = [
     "📝 Öğün Oluştur", 
-    "🔍 Barkod Arama", 
-    "📷 Etiket Okuma", 
     "📊 Günlük Özet", 
-    "➕ Ürün Yönetimi"
+    "➕ Ürün Yönetimi",
+    "🔍 Barkod Arama", 
+    "📷 Etiket Okuma"
 ]
 if is_admin:
     tabs_list.append("👑 Admin Paneli")
@@ -447,7 +447,7 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# TAB 1: ÖĞÜN OLUŞTUR & CANLI ARAMA (MADDELERDEN 1: EKLEMEDEN SONRA OTOMATİK TEMİZLEME)
+# TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
     st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
     
@@ -500,7 +500,6 @@ with tab1:
             current_date_meals.append(meal_item)
             save_data(db)
             
-            # Arama çubuğunu temizle
             st.session_state.search_query = ""
             st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi ve arama kutusu temizlendi!")
             st.rerun()
@@ -537,63 +536,8 @@ with tab1:
     else:
         st.info("Bu tarih için henüz yiyecek eklenmedi.")
 
-# TAB 2: Barkod
+# TAB 2: GÜNLÜK ÖZET & HEDEFLER
 with tab2:
-    st.subheader("Barkod Numarası İle Ürün Bul")
-    barcode_input = st.text_input("Barkod Numarası")
-    if st.button("Sorgula"):
-        p_info = fetch_product_by_barcode(barcode_input)
-        if p_info:
-            st.success(f"Bulunan Ürün: {p_info['isim']}")
-            st.json(p_info)
-            if st.button("Veritabanına Ekle"):
-                new_id = len(db["food_db"]) + 1
-                new_row = {"id": new_id, "kategori": "Barkodla Eklenenler", **p_info}
-                db["food_db"].append(new_row)
-                save_data(db)
-                st.success("Ürün veritabanına eklendi!")
-                st.rerun()
-        else:
-            st.error("Ürün bulunamadı.")
-
-# TAB 3: OCR
-with tab3:
-    st.subheader("Besin Etiketi Fotoğrafı Yükle")
-    uploaded_file = st.file_uploader("Görsel Seçin (JPG/PNG)", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Yüklenen Görsel", width=300)
-        
-        if st.button("Görseli Tara ve Ayrıştır"):
-            with st.spinner("Yapay zeka görseli okuyor..."):
-                reader = load_ocr()
-                image_np = np.array(image)
-                results = reader.readtext(image_np, detail=0)
-                parsed_data = parse_nutrition_text(results)
-                st.session_state['parsed_ocr'] = parsed_data
-
-        if 'parsed_ocr' in st.session_state:
-            p_data = st.session_state['parsed_ocr']
-            st.subheader("Okunan Değerler (100g İçin)")
-            c_kal = st.number_input("Kalori (kcal)", value=p_data['kalori'])
-            c_pro = st.number_input("Protein (g)", value=p_data['protein'])
-            c_karb = st.number_input("Karbonhidrat (g)", value=p_data['karbonhidrat'])
-            c_yag = st.number_input("Yağ (g)", value=p_data['yag'])
-            
-            new_food_name = st.text_input("Ürün Adı Girin", value="Taranan Ürün")
-            c_kat = st.selectbox("Kategori Seçin", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
-            
-            if st.button("Veritabanına Kaydet"):
-                new_id = len(db["food_db"]) + 1
-                new_entry = {"id": new_id, "kategori": c_kat, "isim": new_food_name, "kalori": float(c_kal), "protein": float(c_pro), "karbonhidrat": float(c_karb), "yag": float(c_yag)}
-                db["food_db"].append(new_entry)
-                save_data(db)
-                del st.session_state['parsed_ocr']
-                st.success(f"'{new_food_name}' veritabanına eklendi!")
-                st.rerun()
-
-# TAB 4: Günlük Özet & Hedefler
-with tab4:
     st.subheader(f"📊 Özet - {selected_date_str} ({current_username})")
     t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
 
@@ -628,8 +572,8 @@ with tab4:
     else:
         st.info(f"{selected_date_str} tarihi için henüz bir öğün eklenmedi.")
 
-# TAB 5: DİNAMİK ÜRÜN YÖNETİMİ
-with tab5:
+# TAB 3: DİNAMİK ÜRÜN YÖNETİMİ
+with tab3:
     st.subheader("➕ Veritabanına Yeni Besin Ekle / Mevcut Ürünleri Düzenle")
     
     sub_action = st.radio("İşlem Seçin:", ["Yeni Ürün Ekle", "Mevcut Kayıtlı Ürünü Düzenle"], horizontal=True)
@@ -678,6 +622,61 @@ with tab5:
                 food_obj["yag"] = u_yag
                 save_data(db)
                 st.success(f"'{u_name}' başarıyla güncellendi!")
+                st.rerun()
+
+# TAB 4: BARKOD ARAMA
+with tab4:
+    st.subheader("Barkod Numarası İle Ürün Bul")
+    barcode_input = st.text_input("Barkod Numarası")
+    if st.button("Sorgula"):
+        p_info = fetch_product_by_barcode(barcode_input)
+        if p_info:
+            st.success(f"Bulunan Ürün: {p_info['isim']}")
+            st.json(p_info)
+            if st.button("Veritabanına Ekle"):
+                new_id = len(db["food_db"]) + 1
+                new_row = {"id": new_id, "kategori": "Barkodla Eklenenler", **p_info}
+                db["food_db"].append(new_row)
+                save_data(db)
+                st.success("Ürün veritabanına eklendi!")
+                st.rerun()
+        else:
+            st.error("Ürün bulunamadı.")
+
+# TAB 5: OCR
+with tab5:
+    st.subheader("Besin Etiketi Fotoğrafı Yükle")
+    uploaded_file = st.file_uploader("Görsel Seçin (JPG/PNG)", type=["jpg", "jpeg", "png"])
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Yüklenen Görsel", width=300)
+        
+        if st.button("Görseli Tara ve Ayrıştır"):
+            with st.spinner("Yapay zeka görseli okuyor..."):
+                reader = load_ocr()
+                image_np = np.array(image)
+                results = reader.readtext(image_np, detail=0)
+                parsed_data = parse_nutrition_text(results)
+                st.session_state['parsed_ocr'] = parsed_data
+
+        if 'parsed_ocr' in st.session_state:
+            p_data = st.session_state['parsed_ocr']
+            st.subheader("Okunan Değerler (100g İçin)")
+            c_kal = st.number_input("Kalori (kcal)", value=p_data['kalori'])
+            c_pro = st.number_input("Protein (g)", value=p_data['protein'])
+            c_karb = st.number_input("Karbonhidrat (g)", value=p_data['karbonhidrat'])
+            c_yag = st.number_input("Yağ (g)", value=p_data['yag'])
+            
+            new_food_name = st.text_input("Ürün Adı Girin", value="Taranan Ürün")
+            c_kat = st.selectbox("Kategori Seçin", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+            
+            if st.button("Veritabanına Kaydet"):
+                new_id = len(db["food_db"]) + 1
+                new_entry = {"id": new_id, "kategori": c_kat, "isim": new_food_name, "kalori": float(c_kal), "protein": float(c_pro), "karbonhidrat": float(c_karb), "yag": float(c_yag)}
+                db["food_db"].append(new_entry)
+                save_data(db)
+                del st.session_state['parsed_ocr']
+                st.success(f"'{new_food_name}' veritabanına eklendi!")
                 st.rerun()
 
 # TAB 6: ADMIN PANENİ
