@@ -493,31 +493,30 @@ def analyze_plate_image(image, api_key):
         '[{"isim": "Pirinç Pilavı", "gramaj": 150, "kalori": 240.0, "protein": 4.0, "karbonhidrat": 42.0, "yag": 6.0}]'
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
-            ]
-        }]
-    }
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(url, headers=headers, json=payload, timeout=20)
-    
-    if response.status_code == 200:
-        res_json = response.json()
+    models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
+                ]
+            }]
+        }
+        headers = {'Content-Type': 'application/json'}
         try:
-            raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-            start_idx = raw_text.find("[")
-            end_idx = raw_text.rfind("]")
-            
-            if start_idx != -1 and end_idx != -1:
-                json_str = raw_text[start_idx:end_idx+1]
-                return json.loads(json_str)
-            return None
+            response = requests.post(url, headers=headers, json=payload, timeout=20)
+            if response.status_code == 200:
+                res_json = response.json()
+                raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
+                start_idx = raw_text.find("[")
+                end_idx = raw_text.rfind("]")
+                if start_idx != -1 and end_idx != -1:
+                    json_str = raw_text[start_idx:end_idx+1]
+                    return json.loads(json_str)
         except Exception:
-            return None
+            continue
     return None
 
 tabs_list = [
@@ -537,6 +536,13 @@ tab1, tab2, tab_plate, tab3, tab4, tab5 = tabs[0], tabs[1], tabs[2], tabs[3], ta
 food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
+
+# SESSION STATE TEMİZLİK KONTROLÜ
+if "search_term_input" not in st.session_state:
+    st.session_state["search_term_input"] = ""
+
+if "reset_gramaj_flag" not in st.session_state:
+    st.session_state["reset_gramaj_flag"] = False
 
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
@@ -577,11 +583,17 @@ with tab1:
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
 
+        default_g_val = unit_gram
+        if st.session_state["reset_gramaj_flag"]:
+            if "gramaj_input" in st.session_state:
+                st.session_state["gramaj_input"] = unit_gram
+            st.session_state["reset_gramaj_flag"] = False
+
         with col2:
             gramaj = st.number_input(
                 f"Gramaj (+/- {step_val}g Adım)", 
                 min_value=1, 
-                value=unit_gram,
+                value=default_g_val,
                 step=step_val, 
                 key="gramaj_input"
             )
@@ -606,7 +618,11 @@ with tab1:
                 }
                 current_date_meals.append(meal_item)
                 save_data(db)
-                st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi ve buluta kaydedildi!")
+                
+                st.session_state["search_term_input"] = ""
+                st.session_state["reset_gramaj_flag"] = True
+                
+                st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
                 st.rerun()
 
     st.markdown("---")
@@ -734,7 +750,9 @@ with tab_plate:
     st.subheader("🍱 Porsiyon / Tabak Fotoğrafından Öğün Çıkarma")
     st.info("Tabağınızın fotoğrafını yükleyin; yapay zeka içerikteki yiyecekleri, gramajları ve besin değerlerini otomatik hesaplasın.")
 
-    gemini_key = st.text_input("Gemini API Anahtarınız (Görsel Analizi İçin)", type="password", key="gemini_api_key_input")
+    # Secrets'tan oku, yoksa girdi kutusu göster
+    default_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+    gemini_key = st.text_input("Gemini API Anahtarınız", value=default_gemini_key, type="password", key="gemini_api_key_input")
 
     plate_img_file = st.file_uploader("Tabak / Yemek Fotoğrafı Yükleyin", type=["jpg", "jpeg", "png"], key="plate_image_uploader")
 
