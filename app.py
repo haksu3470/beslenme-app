@@ -32,7 +32,7 @@ def check_hashes(password, hashed_text):
 
 # --- ZENGİNLEŞTİRİLMİŞ VARSAYILAN BESİN LİSTESİ ---
 DEFAULT_FOOD_DATABASE = [
-    # --- KAHVALTILIKLAR, ZEYTİN & SÜRÜLEBİLİRLER (YENİ KATEGORİ) ---
+    # --- KAHVALTILIKLAR, ZEYTİN & SÜRÜLEBİLİRLER ---
     {"id": 1, "kategori": "Kahvaltılıklar", "isim": "Siyah Zeytin (1 Adet ~5g)", "kalori": 115.0, "protein": 0.8, "karbonhidrat": 6.3, "yag": 10.7},
     {"id": 2, "kategori": "Kahvaltılıklar", "isim": "Yeşil Zeytin (1 Adet ~5g)", "kalori": 145.0, "protein": 1.0, "karbonhidrat": 3.8, "yag": 15.3},
     {"id": 3, "kategori": "Kahvaltılıklar", "isim": "Süzme / Çiçek Balı (1 Y.Kaşığı ~20g)", "kalori": 304.0, "protein": 0.3, "karbonhidrat": 82.4, "yag": 0.0},
@@ -157,14 +157,17 @@ if 'db' not in st.session_state:
 
 db = st.session_state.db
 
-# --- OTURUM & ÇEREZ KONTROLÜ ---
+# --- OTURUM & ÇEREZ & MOBİL HAFIZA KONTROLÜ ---
 try:
     saved_user = cookie_manager.get('logged_user')
 except Exception:
     saved_user = None
 
-if 'logged_in' not in st.session_state:
-    if saved_user and saved_user in db["users"]:
+# Eğer session_state'te veya çerezde varsa otomatik oturum aç
+if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+    if 'current_user' in st.session_state and st.session_state.current_user in db["users"]:
+        st.session_state.logged_in = True
+    elif saved_user and saved_user in db["users"]:
         st.session_state.logged_in = True
         st.session_state.current_user = saved_user
     else:
@@ -197,7 +200,8 @@ if not st.session_state.logged_in:
                     
                     if remember_me:
                         try:
-                            cookie_manager.set('logged_user', username, key='set_user_cookie')
+                            # Çerez süresini uzun tutarak kaydet
+                            cookie_manager.set('logged_user', username, key='set_user_cookie', expires_at=datetime(2030, 1, 1))
                         except Exception:
                             pass
                     
@@ -228,7 +232,7 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.current_user = g_user
                 try:
-                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google')
+                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google', expires_at=datetime(2030, 1, 1))
                 except Exception:
                     pass
                 st.success(f"Google ile oturum açıldı: {google_email}")
@@ -422,7 +426,6 @@ with tab1:
     selected_cat = col_cat.selectbox("Kategori Filtresi", categories)
     search_term = col_search.text_input("🔍 Hızlı Besin Ara (İsim yazın)", placeholder="Örn: Bal, Reçel, Zeytin, Menemen...")
 
-    # Filtreleme Mantığı
     filtered_df = food_df.copy()
     if selected_cat != "Tüm Kategoriler":
         filtered_df = filtered_df[filtered_df["kategori"] == selected_cat]
