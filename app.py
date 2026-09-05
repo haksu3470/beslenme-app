@@ -524,4 +524,450 @@ def analyze_plate_image(image, api_key):
         res_json = response.json()
         try:
             raw_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-            clean_json = raw_text.replace("```json", "").replace("
+            
+            # GÜVENLİ DÜZELTME: Markdown bloklarını güvenle temizle
+            start_idx = raw_text.find("[")
+            end_idx = raw_text.rfind("]")
+            
+            if start_idx != -1 and end_idx != -1:
+                json_str = raw_text[start_idx:end_idx+1]
+                return json.loads(json_str)
+            return None
+        except Exception:
+            return None
+    return None
+
+tabs_list = [
+    "📝 Öğün Oluştur", 
+    "📊 Günlük Özet", 
+    "🍱 AI Porsiyon / Tabak Okuma",
+    "➕ Ürün Yönetimi",
+    "🔍 Barkod Arama", 
+    "📷 Etiket Okuma"
+]
+if is_admin:
+    tabs_list.append("👑 Admin Paneli")
+
+tabs = st.tabs(tabs_list)
+tab1, tab2, tab_plate, tab3, tab4, tab5 = tabs[0], tabs[1], tabs[2], tabs[3], tabs[4], tabs[5]
+
+food_df = pd.DataFrame(db["food_db"])
+if "kategori" not in food_df.columns:
+    food_df["kategori"] = "Diğer / Eklenenler"
+
+# TAB 1: ÖĞÜN OLUŞTUR
+with tab1:
+    st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
+    
+    col_cat, col_search = st.columns([1, 2])
+    categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
+    selected_cat = col_cat.selectbox("Kategori Filtresi", categories, key="cat_filter_select")
+    
+    search_term = col_search.text_input(
+        "🔍 Hızlı Besin Ara (Aramak istediğiniz ürünü yazın)", 
+        key="search_term_input",
+        placeholder="Örn: Ekmek, Bal, Zeytin, Lavaş, Menemen..."
+    )
+
+    filtered_df = food_df.copy()
+    if selected_cat != "Tüm Kategoriler":
+        filtered_df = filtered_df[filtered_df["kategori"] == selected_cat]
+        
+    if search_term.strip():
+        filtered_df = filtered_df[filtered_df["isim"].str.contains(search_term.strip(), case=False, na=False, regex=False)]
+
+    food_list_sorted = filtered_df["isim"].tolist()
+
+    if not food_list_sorted:
+        st.warning(f"'{search_term}' aramasına uygun besin bulunamadı. Lütfen kelimeyi kontrol edin veya 'Ürün Yönetimi' sekmesinden ekleyin.")
+    else:
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            selected_food_name = st.selectbox(
+                f"Besin Seçin ({len(food_list_sorted)} Sonuç)", 
+                food_list_sorted, 
+                index=None,
+                placeholder="--- Lütfen Bir Besin Seçin ---",
+                key="selected_food_select"
+            )
+        
+        unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
+        step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
+
+        with col2:
+            gramaj = st.number_input(
+                f"Gramaj (+/- {step_val}g Adım)", 
+                min_value=1, 
+                value=unit_gram,
+                step=step_val, 
+                key="gramaj_input"
+            )
+
+        with col3:
+            meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
+
+        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn"):
+            if not selected_food_name:
+                st.error("Lütfen önce bir besin seçin!")
+            else:
+                food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
+                ratio = gramaj / 100.0
+                meal_item = {
+                    "Öğün": meal_type,
+                    "Besin": selected_food_name,
+                    "Gramaj (g)": gramaj,
+                    "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
+                    "Protein (g)": round(food_row["protein"] * ratio, 1),
+                    "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
+                    "Yağ (g)": round(food_row["yag"] * ratio, 1)
+                }
+                current_date_meals.append(meal_item)
+                save_data(db)
+                st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
+                st.rerun()
+
+    st.markdown("---")
+    st.subheader(f"📋 Eklenen Öğünler Ve Hızlı Düzenleme ({len(current_date_meals)} Adet)")
+
+    if current_date_meals:
+        for idx, item in enumerate(current_date_meals):
+            with st.expander(f"📌 {item['Öğün']} - {item['Besin']} ({item['Gramaj (g)']}g) | {item['Kalori (kcal)']} kcal"):
+                e_col1, e_col2, e_col3 = st.columns([2, 2, 1])
+                
+                u_step = parse_unit_gram(item['Besin'])
+                u_step_val = u_step if u_step in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
+                new_gramaj = e_col1.number_input(
+                    f"Gramaj Düzelt (+/- {u_step_val}g)", 
+                    min_value=1, 
+                    value=int(item['Gramaj (g)']), 
+                    step=u_step_val,
+                    key=f"edit_g_{idx}"
+                )
+                new_meal_type = e_col2.selectbox("Öğün Türü Değiştir", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], index=["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"].index(item['Öğün']), key=f"edit_m_{idx}")
+                
+                if e_col3.button("💾 Güncelle", key=f"btn_update_{idx}"):
+                    orig_food = food_df[food_df["isim"] == item["Besin"]]
+                    if not orig_food.empty:
+                        f_row = orig_food.iloc[0]
+                        r = new_gramaj / 100.0
+                        item["Gramaj (g)"] = new_gramaj
+                        item["Öğün"] = new_meal_type
+                        item["Kalori (kcal)"] = round(f_row["kalori"] * r, 1)
+                        item["Protein (g)"] = round(f_row["protein"] * r, 1)
+                        item["Karbonhidrat (g)"] = round(f_row["karbonhidrat"] * r, 1)
+                        item["Yağ (g)"] = round(f_row["yag"] * r, 1)
+                        save_data(db)
+                        st.success("Öğün miktarı ve değerleri güncellendi!")
+                        st.rerun()
+
+                # GÜVENLİ SİLME
+                if f"confirm_del_{idx}" not in st.session_state:
+                    st.session_state[f"confirm_del_{idx}"] = False
+
+                if not st.session_state[f"confirm_del_{idx}"]:
+                    if st.button("🗑️ Bu Öğünü Sil", key=f"btn_del_init_{idx}"):
+                        st.session_state[f"confirm_del_{idx}"] = True
+                        st.rerun()
+                else:
+                    st.warning("⚠️ Bu öğünü silmek istediğinize emin misiniz?")
+                    col_del1, col_del2 = st.columns(2)
+                    if col_del1.button("✅ Evet, Sil", key=f"btn_del_yes_{idx}"):
+                        current_date_meals.pop(idx)
+                        save_data(db)
+                        st.session_state[f"confirm_del_{idx}"] = False
+                        st.success("Öğün silindi.")
+                        st.rerun()
+                    if col_del2.button("❌ İptal", key=f"btn_del_no_{idx}"):
+                        st.session_state[f"confirm_del_{idx}"] = False
+                        st.rerun()
+    else:
+        st.info("Bu tarih için henüz yiyecek eklenmedi.")
+
+# TAB 2: GÜNLÜK ÖZET & HEDEFLER
+with tab2:
+    st.subheader(f"📊 Özet - {selected_date_str} ({current_username})")
+    t_kal, t_pro, t_karb, t_yag = user_data["target_kalori"], user_data["target_protein"], user_data["target_karb"], user_data["target_yag"]
+
+    # SU ÖZETİ METRİĞİ
+    su_metrik_col1, su_metrik_col2 = st.columns([3, 1])
+    su_metrik_col1.metric("💧 İçilen Su Miktarı", f"{current_date_water} ml", f"Hedef: {target_su} ml ({int(target_su - current_date_water)} ml Kalan)")
+
+    st.markdown("---")
+
+    if current_date_meals:
+        df_meals = pd.DataFrame(current_date_meals)
+        tot_kalori, tot_protein, tot_karb, tot_yag = df_meals['Kalori (kcal)'].sum(), df_meals['Protein (g)'].sum(), df_meals['Karbonhidrat (g)'].sum(), df_meals['Yağ (g)'].sum()
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Alınan Kalori", f"{tot_kalori:.1f} kcal", f"Kalan: {int(t_kal - tot_kalori)} kcal")
+        m2.metric("Alınan Protein", f"{tot_protein:.1f} g", f"Hedef: {int(t_pro)} g")
+        m3.metric("Alınan Karbonhidrat", f"{tot_karb:.1f} g", f"Hedef: {int(t_karb)} g")
+        m4.metric("Alınan Yağ", f"{tot_yag:.1f} g", f"Hedef: {int(t_yag)} g")
+
+        st.markdown("---")
+        st.write("### 🎯 Hedef İlerleme Barları")
+        st.progress(min(tot_kalori / t_kal, 1.0) if t_kal > 0 else 0.0)
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.write("**Protein**"); col_m1.progress(min(tot_protein / t_pro, 1.0) if t_pro > 0 else 0.0)
+        col_m2.write("**Karbonhidrat**"); col_m2.progress(min(tot_karb / t_karb, 1.0) if t_karb > 0 else 0.0)
+        col_m3.write("**Yağ**"); col_m3.progress(min(tot_yag / t_yag, 1.0) if t_yag > 0 else 0.0)
+
+        st.markdown("---")
+        col_t1, col_t2 = st.columns([4, 1])
+        col_t1.subheader(f"📋 {selected_date_str} Yenen Yemekler")
+        
+        if "confirm_clear_day" not in st.session_state:
+            st.session_state["confirm_clear_day"] = False
+
+        if not st.session_state["confirm_clear_day"]:
+            if col_t2.button("🗑️ Seçili Günü Sıfırla"):
+                st.session_state["confirm_clear_day"] = True
+                st.rerun()
+        else:
+            st.warning("⚠️ Bütün günün öğün kaydı silinecektir!")
+            c_c1, c_c2 = st.columns(2)
+            if c_c1.button("✅ Tüm Günü Sil"):
+                user_data["history_meals"][selected_date_str] = []
+                save_data(db)
+                st.session_state["confirm_clear_day"] = False
+                st.rerun()
+            if c_c2.button("❌ İptal"):
+                st.session_state["confirm_clear_day"] = False
+                st.rerun()
+
+        st.dataframe(df_meals, use_container_width=True)
+    else:
+        st.info(f"{selected_date_str} tarihi için henüz bir öğün eklenmedi.")
+
+# TAB PORSIYON / TABAK ANALIZI (AI)
+with tab_plate:
+    st.subheader("🍱 Porsiyon / Tabak Fotoğrafından Öğün Çıkarma")
+    st.info("Tabağınızın fotoğrafını yükleyin; yapay zeka içerikteki yiyecekleri, gramajları ve besin değerlerini otomatik hesaplasın.")
+
+    gemini_key = st.text_input("Gemini API Anahtarınız (Görsel Analizi İçin)", type="password", key="gemini_api_key_input")
+
+    plate_img_file = st.file_uploader("Tabak / Yemek Fotoğrafı Yükleyin", type=["jpg", "jpeg", "png"], key="plate_image_uploader")
+
+    if plate_img_file:
+        img_plate = Image.open(plate_img_file)
+        st.image(img_plate, caption="Yüklenen Porsiyon Görseli", width=350)
+
+        if st.button("🤖 Yapay Zeka İle Tabak Analizi Yap"):
+            if not gemini_key.strip():
+                st.error("Lütfen geçerli bir Gemini API Key giriniz.")
+            else:
+                with st.spinner("Tabak içeriği ve besin değerleri hesaplanıyor..."):
+                    parsed_plate = analyze_plate_image(img_plate, gemini_key.strip())
+                    if parsed_plate:
+                        st.session_state["detected_plate_items"] = parsed_plate
+                        st.success("Tabak başarıyla analiz edildi!")
+                    else:
+                        st.error("Görsel analiz edilemedi veya yanıt alınamadı. API anahtarını kontrol edin.")
+
+    if "detected_plate_items" in st.session_state:
+        st.markdown("---")
+        st.write("### 🔍 Tespit Edilen Öğün İçeriği")
+        detected_items = st.session_state["detected_plate_items"]
+        
+        target_meal_type = st.selectbox("Eklenecek Öğün Türü", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="ai_meal_type_target")
+
+        df_detected = pd.DataFrame(detected_items)
+        st.dataframe(df_detected, use_container_width=True)
+
+        if st.button("✨ Tespit Edilen Tüm Yemekleri Günlük Öğüne Ekle"):
+            for d_item in detected_items:
+                meal_item = {
+                    "Öğün": target_meal_type,
+                    "Besin": d_item.get("isim", "Bilinmeyen Yiyecek"),
+                    "Gramaj (g)": float(d_item.get("gramaj", 100)),
+                    "Kalori (kcal)": float(d_item.get("kalori", 0)),
+                    "Protein (g)": float(d_item.get("protein", 0)),
+                    "Karbonhidrat (g)": float(d_item.get("karbonhidrat", 0)),
+                    "Yağ (g)": float(d_item.get("yag", 0))
+                }
+                current_date_meals.append(meal_item)
+            save_data(db)
+            del st.session_state["detected_plate_items"]
+            st.success(f"Tüm yiyecekler {selected_date_str} - {target_meal_type} kaydınıza eklendi!")
+            st.rerun()
+
+# TAB 3: DİNAMİK ÜRÜN YÖNETİMİ
+with tab3:
+    st.subheader("➕ Veritabanına Yeni Besin Ekle / Mevcut Ürünleri Düzenle & Sil")
+    
+    sub_action = st.radio("İşlem Seçin:", ["Yeni Ürün Ekle", "Mevcut Kayıtlı Ürünü Düzenle / Sil"], horizontal=True)
+
+    if sub_action == "Yeni Ürün Ekle":
+        with st.form(key="add_new_product_form", clear_on_submit=True):
+            col_a, col_b = st.columns(2)
+            custom_name = col_a.text_input("Yiyecek / Ürün Adı")
+            custom_cat = col_a.selectbox("Kategorisi", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"])
+            custom_kal = col_b.number_input("100g Kalori (kcal)", min_value=0.0, value=50.0)
+            custom_pro = col_b.number_input("100g Protein (g)", min_value=0.0, value=1.0)
+            custom_karb = col_b.number_input("100g Karbonhidrat (g)", min_value=0.0, value=10.0)
+            custom_yag = col_b.number_input("100g Yağ (g)", min_value=0.0, value=0.0)
+
+            submit_btn = st.form_submit_button("✨ Veritabanına Kalıcı Olarak Ekle")
+            if submit_btn:
+                if custom_name:
+                    new_id = len(db["food_db"]) + 1
+                    new_entry = {"id": new_id, "kategori": custom_cat, "isim": custom_name, "kalori": float(custom_kal), "protein": float(custom_pro), "karbonhidrat": float(custom_karb), "yag": float(custom_yag)}
+                    db["food_db"].append(new_entry)
+                    save_data(db)
+                    st.success(f"'{custom_name}' eklendi ve form temizlendi!")
+                    st.rerun()
+
+    elif sub_action == "Mevcut Kayıtlı Ürünü Düzenle / Sil":
+        st.write("Veritabanındaki bir ürünün besin değerlerini güncelleyebilir veya veritabanından tamamen silebilirsiniz:")
+        all_food_names = [f["isim"] for f in db["food_db"]]
+        selected_edit_food = st.selectbox(
+            "İşlem Yapılacak Ürünü Seçin", 
+            sorted(all_food_names),
+            index=None,
+            placeholder="--- Lütfen Bir Ürün Seçin ---"
+        )
+        
+        if selected_edit_food:
+            food_obj = next((item for item in db["food_db"] if item["isim"] == selected_edit_food), None)
+            if food_obj:
+                ed_col1, ed_col2 = st.columns(2)
+                u_name = ed_col1.text_input("Ürün İsmi", value=food_obj["isim"])
+                u_cat = ed_col1.selectbox("Kategori", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+                u_kal = ed_col2.number_input("Kalori (100g)", value=float(food_obj["kalori"]))
+                u_pro = ed_col2.number_input("Protein (100g)", value=float(food_obj["protein"]))
+                u_karb = ed_col2.number_input("Karbonhidrat (100g)", value=float(food_obj["karbonhidrat"]))
+                u_yag = ed_col2.number_input("Yağ (100g)", value=float(food_obj["yag"]))
+
+                col_btn1, col_btn2 = st.columns(2)
+                if col_btn1.button("💾 Ürün Değerlerini Güncelle"):
+                    food_obj["isim"] = u_name
+                    food_obj["kategori"] = u_cat
+                    food_obj["kalori"] = u_kal
+                    food_obj["protein"] = u_pro
+                    food_obj["karbonhidrat"] = u_karb
+                    food_obj["yag"] = u_yag
+                    save_data(db)
+                    st.success(f"'{u_name}' başarıyla güncellendi!")
+                    st.rerun()
+
+                if "confirm_del_db_food" not in st.session_state:
+                    st.session_state["confirm_del_db_food"] = False
+
+                if not st.session_state["confirm_del_db_food"]:
+                    if col_btn2.button("🗑️ Ürünü Veritabanından Sil"):
+                        st.session_state["confirm_del_db_food"] = True
+                        st.rerun()
+                else:
+                    st.warning(f"⚠️ '{selected_edit_food}' veritabanından tamamen silinecektir!")
+                    d_col1, d_col2 = st.columns(2)
+                    if d_col1.button("✅ Evet, Veritabanından Sil"):
+                        db["food_db"] = [f for f in db["food_db"] if f["isim"] != selected_edit_food]
+                        save_data(db)
+                        st.session_state["confirm_del_db_food"] = False
+                        st.success("Ürün veritabanından silindi.")
+                        st.rerun()
+                    if d_col2.button("❌ İptal"):
+                        st.session_state["confirm_del_db_food"] = False
+                        st.rerun()
+
+# TAB 4: BARKOD ARAMA
+with tab4:
+    st.subheader("Barkod Numarası İle Ürün Bul")
+    barcode_input = st.text_input("Barkod Numarası")
+    if st.button("Sorgula"):
+        p_info = fetch_product_by_barcode(barcode_input)
+        if p_info:
+            st.success(f"Bulunan Ürün: {p_info['isim']}")
+            st.json(p_info)
+            if st.button("Veritabanına Ekle"):
+                new_id = len(db["food_db"]) + 1
+                new_row = {"id": new_id, "kategori": "Barkodla Eklenenler", **p_info}
+                db["food_db"].append(new_row)
+                save_data(db)
+                st.success("Ürün veritabanına eklendi!")
+                st.rerun()
+        else:
+            st.error("Ürün bulunamadı.")
+
+# TAB 5: OCR
+with tab5:
+    st.subheader("Besin Etiketi Fotoğrafı Yükle")
+    uploaded_file = st.file_uploader("Görsel Seçin (JPG/PNG)", type=["jpg", "jpeg", "png"])
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Yüklenen Görsel", width=300)
+        
+        if st.button("Görseli Tara ve Ayrıştır"):
+            with st.spinner("Yapay zeka görseli okuyor..."):
+                reader = load_ocr()
+                image_np = np.array(image)
+                results = reader.readtext(image_np, detail=0)
+                parsed_data = parse_nutrition_text(results)
+                st.session_state['parsed_ocr'] = parsed_data
+
+        if 'parsed_ocr' in st.session_state:
+            p_data = st.session_state['parsed_ocr']
+            st.subheader("Okunan Değerler (100g İçin)")
+            c_kal = st.number_input("Kalori (kcal)", value=p_data['kalori'])
+            c_pro = st.number_input("Protein (g)", value=p_data['protein'])
+            c_karb = st.number_input("Karbonhidrat (g)", value=p_data['karbonhidrat'])
+            c_yag = st.number_input("Yağ (g)", value=p_data['yag'])
+            
+            new_food_name = st.text_input("Ürün Adı Girin", value="Taranan Ürün")
+            c_kat = st.selectbox("Kategori Seçin", ["Ekmek & Unlu Mamuller", "Kahvaltılıklar", "Meyveler", "Sebzeler", "Tahıllar & Bakliyat", "Kuruyemişler & Yağlar", "Et, Balık & Yumurta", "Süt Ürünleri", "Ev Yemekleri", "Diğer / Eklenenler"], index=0)
+            
+            if st.button("Veritabanına Kaydet"):
+                new_id = len(db["food_db"]) + 1
+                new_entry = {"id": new_id, "kategori": c_kat, "isim": new_food_name, "kalori": float(c_kal), "protein": float(c_pro), "karbonhidrat": float(c_karb), "yag": float(c_yag)}
+                db["food_db"].append(new_entry)
+                save_data(db)
+                del st.session_state['parsed_ocr']
+                st.success(f"'{new_food_name}' veritabanına eklendi!")
+                st.rerun()
+
+# TAB 6: ADMIN PANENİ
+if is_admin:
+    with tabs[6]:
+        st.subheader("👑 Admin Paneli - Tüm Kullanıcıların Takip Özeti")
+        
+        all_users = list(db["users"].keys())
+        selected_view_user = st.selectbox("İncelemek İstediğiniz Kullanıcıyı Seçin", all_users)
+        
+        u_info = db["users"][selected_view_user]
+        st.markdown(f"### 👤 Kullanıcı: **{selected_view_user}**")
+        st.write(f"• **Hedef Kalori:** {int(u_info['target_kalori'])} kcal | **Hedef Protein:** {int(u_info['target_protein'])}g")
+        st.write(f"• **Hedef Su:** {u_info.get('target_su', 2500)} ml")
+
+        st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırla (Admin)")
+        admin_new_pass = st.text_input(f"'{selected_view_user}' İçin Yeni Şifre Belirle", type="password")
+        if st.button(f"'{selected_view_user}' Şifresini Değiştir"):
+            if admin_new_pass.strip():
+                u_info["password"] = make_hashes(admin_new_pass)
+                save_data(db)
+                st.success(f"'{selected_view_user}' kullanıcısının şifresi başarıyla değiştirildi!")
+            else:
+                st.error("Lütfen bir şifre girin.")
+
+        st.markdown("---")
+        u_hist = u_info.get("history_meals", {})
+        u_water_hist = u_info.get("history_water", {})
+        
+        if u_hist or u_water_hist:
+            all_dates = sorted(list(set(list(u_hist.keys()) + list(u_water_hist.keys()))), reverse=True)
+            v_date = st.selectbox("İncelenecek Tarih", all_dates)
+            
+            u_meals = u_hist.get(v_date, [])
+            u_water = u_water_hist.get(v_date, 0)
+            
+            st.write(f"💧 **{v_date} Tüketilen Su:** {u_water} ml")
+            
+            if u_meals:
+                u_df = pd.DataFrame(u_meals)
+                tot_kal = u_df['Kalori (kcal)'].sum()
+                st.metric(f"{v_date} Tükettiği Kalori", f"{tot_kal:.1f} kcal", f"Kalan: {int(u_info['target_kalori'] - tot_kal)} kcal")
+                st.dataframe(u_df, use_container_width=True)
+            else:
+                st.info(f"{selected_view_user} kullanıcısının {v_date} tarihinde kayıtlı öğünü yok.")
+        else:
+            st.info(f"{selected_view_user} henüz hiçbir tarih için öğün eklememiş.")
