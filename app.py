@@ -534,13 +534,15 @@ with tab1:
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = col_cat.selectbox("Kategori Filtresi", categories, key="cat_filter_select")
     
-    # Arama terimi için varsayılan state ayarı
-    if "search_term_input" not in st.session_state:
-        st.session_state["search_term_input"] = ""
+    # Dinamik Arama Kutusu ve Gramaj Reset Sayacı
+    if "search_key_id" not in st.session_state:
+        st.session_state["search_key_id"] = 0
+    if "gramaj_input" not in st.session_state:
+        st.session_state["gramaj_input"] = 100
 
     search_term = col_search.text_input(
         "🔍 Hızlı Besin Ara (Aramak istediğiniz ürünü yazın)", 
-        key="search_term_input",
+        key=f"search_term_input_{st.session_state['search_key_id']}",
         placeholder="Örn: Ekmek, Bal, Zeytin, Lavaş, Menemen..."
     )
 
@@ -557,21 +559,26 @@ with tab1:
         st.warning(f"'{search_term}' aramasına uygun besin bulunamadı. Lütfen kelimeyi kontrol edin veya 'Ürün Yönetimi' sekmesinden ekleyin.")
     else:
         col1, col2, col3 = st.columns([2, 1, 1])
+        
+        # Yiyecek seçildiğinde gramajı otomatik o yiyeceğin porsiyonuna eşitleyen fonksiyon
+        def on_food_change():
+            sel_food = st.session_state.get(f"selected_food_select_{st.session_state['search_key_id']}")
+            if sel_food:
+                unit_g = parse_unit_gram(sel_food)
+                st.session_state["gramaj_input"] = unit_g
+
         with col1:
             selected_food_name = st.selectbox(
                 f"Besin Seçin ({len(food_list_sorted)} Sonuç)", 
                 food_list_sorted, 
                 index=None,
                 placeholder="--- Lütfen Bir Besin Seçin ---",
-                key="selected_food_select"
+                key=f"selected_food_select_{st.session_state['search_key_id']}",
+                on_change=on_food_change
             )
         
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
-
-        # Gramaj sıfırlama mantığı
-        if "gramaj_input" not in st.session_state:
-            st.session_state["gramaj_input"] = unit_gram
 
         with col2:
             gramaj = st.number_input(
@@ -584,7 +591,7 @@ with tab1:
         with col3:
             meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        # Öğüne ekleme yapıldığında arama kutusunu ve gramajı güvenle sıfırlayan callback fonksiyonu
+        # Öğüne ekleme yapıldığında arama kutusunu ve gramajı sıfırlayan callback fonksiyonu
         def add_meal_and_reset():
             if not selected_food_name:
                 st.error("Lütfen önce bir besin seçin!")
@@ -604,8 +611,8 @@ with tab1:
             current_date_meals.append(meal_item)
             save_data(db)
             
-            # Form alanlarını sıfırla
-            st.session_state["search_term_input"] = ""
+            # Form alanlarını sıfırla (ID artırılarak arama kutusu ve seçim temizlenir)
+            st.session_state["search_key_id"] += 1
             st.session_state["gramaj_input"] = 100
             st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
 
