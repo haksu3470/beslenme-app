@@ -29,7 +29,6 @@ except Exception as e:
     st.error("Supabase bağlantısı kurulamadı. Lütfen Streamlit Secrets ayarlarınızı kontrol edin.")
 
 # --- ÇEREZ (COOKIE) YÖNETİCİSİ ---
-@st.cache_resource
 def get_cookie_manager():
     return stx.CookieManager()
 
@@ -276,7 +275,7 @@ if not st.session_state.logged_in:
                     else:
                         st.error("Lütfen geçerli bir yeni şifre yazın.")
                 else:
-                    st.error("Girdiğiniz yaş ve boy bilgisi sistemdeki kayıtla eşleşmedi!")
+                    st.error("Girdiğiniz yaş ve boy bilgi sistemdeki kayıtla eşleşmedi!")
             else:
                 st.error("Bu kullanıcı adıyla kayıtlı hesap bulunamadı.")
 
