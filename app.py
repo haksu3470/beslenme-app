@@ -198,7 +198,7 @@ if not st.session_state.logged_in:
                 g_user = google_email.split("@")[0].replace(".", "_")
                 
                 # YÖNETİCİ E-POSTA LİSTESİ
-                ADMIN_EMAILS = ["haksu@huseyinaksu.com.tr", "huseyinaksu3470@gmail.com"]
+                ADMIN_EMAILS = ["haksu@huseyinaksu.com.tr", "huseyinaksu@gmail.com"]
                 user_is_admin = google_email.lower().strip() in [e.lower() for e in ADMIN_EMAILS]
 
                 if g_user not in db["users"]:
