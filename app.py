@@ -29,6 +29,7 @@ except Exception as e:
     st.error("Supabase bağlantısı kurulamadı. Lütfen Streamlit Secrets ayarlarınızı kontrol edin.")
 
 # --- ÇEREZ (COOKIE) YÖNETİCİSİ ---
+@st.cache_resource
 def get_cookie_manager():
     return stx.CookieManager()
 
@@ -157,17 +158,18 @@ def save_data(data):
 st.session_state.db = load_data()
 db = st.session_state.db
 
+# MOBİL DÜZEYDE UZUN SÜRELİ OTURUM YÖNETİMİ
 try:
     saved_user = cookie_manager.get('logged_user')
 except Exception:
     saved_user = None
 
 if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-    if 'current_user' in st.session_state and st.session_state.current_user in db["users"]:
-        st.session_state.logged_in = True
-    elif saved_user and saved_user in db["users"]:
+    if saved_user and saved_user in db["users"]:
         st.session_state.logged_in = True
         st.session_state.current_user = saved_user
+    elif 'current_user' in st.session_state and st.session_state.current_user in db["users"]:
+        st.session_state.logged_in = True
     else:
         st.session_state.logged_in = False
         st.session_state.current_user = None
@@ -195,21 +197,31 @@ if not st.session_state.logged_in:
         if st.button("🚀 Google ile Bağlan"):
             if "@" in google_email and "." in google_email:
                 g_user = google_email.split("@")[0].replace(".", "_")
+                
+                # YÖNETİCİ E-POSTA LİSTESİ
+                ADMIN_EMAILS = ["haksu@huseyinaksu.com.tr", "huseyinaksu3470@gmail.com"]
+                user_is_admin = google_email.lower().strip() in [e.lower() for e in ADMIN_EMAILS]
+
                 if g_user not in db["users"]:
                     db["users"][g_user] = {
                         "password": make_hashes("google_auth_dummy_pwd"),
-                        "is_admin": False, "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
+                        "is_admin": user_is_admin,
+                        "cinsiyet": "Erkek", "yas": 30, "kilo": 70.0, "boy": 170,
                         "aktivite": "Hafif Hareketli (Haftada 1-3 gün egzersiz)", "hedef": "Kilo Koruma",
                         "target_kalori": 2000.0, "target_protein": 150.0, "target_karb": 200.0, "target_yag": 50.0,
                         "target_su": 2500,
                         "history_meals": {},
                         "history_water": {}
                     }
-                    save_data(db)
+                else:
+                    if user_is_admin:
+                        db["users"][g_user]["is_admin"] = True
+
+                save_data(db)
                 st.session_state.logged_in = True
                 st.session_state.current_user = g_user
                 try:
-                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google', expires_at=datetime(2030, 1, 1))
+                    cookie_manager.set('logged_user', g_user, key='set_user_cookie_google', expires_at=datetime(2035, 1, 1))
                 except Exception:
                     pass
                 st.success(f"Google ile oturum açıldı: {google_email}")
@@ -232,7 +244,7 @@ if not st.session_state.logged_in:
                     
                     if remember_me:
                         try:
-                            cookie_manager.set('logged_user', username, key='set_user_cookie', expires_at=datetime(2030, 1, 1))
+                            cookie_manager.set('logged_user', username, key='set_user_cookie', expires_at=datetime(2035, 1, 1))
                         except Exception:
                             pass
                     
@@ -560,7 +572,6 @@ with tab1:
     else:
         col1, col2, col3 = st.columns([2, 1, 1])
         
-        # Yiyecek seçildiğinde gramajı otomatik o yiyeceğin porsiyonuna eşitleyen fonksiyon
         def on_food_change():
             sel_food = st.session_state.get(f"selected_food_select_{st.session_state['search_key_id']}")
             if sel_food:
@@ -591,7 +602,6 @@ with tab1:
         with col3:
             meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        # Öğüne ekleme yapıldığında arama kutusunu ve gramajı sıfırlayan callback fonksiyonu
         def add_meal_and_reset():
             if not selected_food_name:
                 st.error("Lütfen önce bir besin seçin!")
@@ -611,7 +621,7 @@ with tab1:
             current_date_meals.append(meal_item)
             save_data(db)
             
-            # Form alanlarını sıfırla (ID artırılarak arama kutusu ve seçim temizlenir)
+            # Form alanlarını sıfırla
             st.session_state["search_key_id"] += 1
             st.session_state["gramaj_input"] = 100
             st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
@@ -923,7 +933,7 @@ with tab5:
                 st.success(f"'{new_food_name}' veritabanına eklendi!")
                 st.rerun()
 
-# TAB 6: ADMIN PANENİ
+# TAB 6: ADMIN PANELİ
 if is_admin:
     with tabs[6]:
         st.subheader("👑 Admin Paneli - Tüm Kullanıcıların Takip Özeti")
@@ -936,7 +946,7 @@ if is_admin:
         st.write(f"• **Hedef Kalori:** {int(u_info.get('target_kalori', 2000))} kcal | **Hedef Protein:** {int(u_info.get('target_protein', 150))}g")
         st.write(f"• **Hedef Su:** {u_info.get('target_su', 2500)} ml")
 
-        st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırla (Admin)")
+        st.markdown("#### 🔑 Kullanıcı Şifresi Sıfırlama")
         admin_new_pass = st.text_input(f"'{selected_view_user}' İçin Yeni Şifre Belirle", type="password")
         if st.button(f"'{selected_view_user}' Şifresini Değiştir"):
             if admin_new_pass.strip():
