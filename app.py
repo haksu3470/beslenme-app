@@ -526,13 +526,6 @@ food_df = pd.DataFrame(db["food_db"])
 if "kategori" not in food_df.columns:
     food_df["kategori"] = "Diğer / Eklenenler"
 
-# SESSION STATE TEMİZLİK KONTROLÜ
-if "search_term_input" not in st.session_state:
-    st.session_state["search_term_input"] = ""
-
-if "reset_gramaj_flag" not in st.session_state:
-    st.session_state["reset_gramaj_flag"] = False
-
 # TAB 1: ÖĞÜN OLUŞTUR
 with tab1:
     st.subheader(f"Öğüne Besin Ekle ({selected_date_str})")
@@ -541,6 +534,10 @@ with tab1:
     categories = ["Tüm Kategoriler"] + sorted(list(food_df["kategori"].dropna().unique()))
     selected_cat = col_cat.selectbox("Kategori Filtresi", categories, key="cat_filter_select")
     
+    # Arama terimi için varsayılan state ayarı
+    if "search_term_input" not in st.session_state:
+        st.session_state["search_term_input"] = ""
+
     search_term = col_search.text_input(
         "🔍 Hızlı Besin Ara (Aramak istediğiniz ürünü yazın)", 
         key="search_term_input",
@@ -572,17 +569,14 @@ with tab1:
         unit_gram = parse_unit_gram(selected_food_name) if selected_food_name else 100
         step_val = unit_gram if unit_gram in [5, 10, 15, 20, 30, 50, 60, 80, 100, 110, 150, 200] else 10
 
-        default_g_val = unit_gram
-        if st.session_state["reset_gramaj_flag"]:
-            if "gramaj_input" in st.session_state:
-                st.session_state["gramaj_input"] = unit_gram
-            st.session_state["reset_gramaj_flag"] = False
+        # Gramaj sıfırlama mantığı
+        if "gramaj_input" not in st.session_state:
+            st.session_state["gramaj_input"] = unit_gram
 
         with col2:
             gramaj = st.number_input(
                 f"Gramaj (+/- {step_val}g Adım)", 
                 min_value=1, 
-                value=default_g_val,
                 step=step_val, 
                 key="gramaj_input"
             )
@@ -590,29 +584,32 @@ with tab1:
         with col3:
             meal_type = st.selectbox("Öğün Seçin", ["Kahvaltı", "Öğle Yemeği", "Akşam Yemeği", "Aperatif"], key="meal_type_select")
 
-        if st.button("➕ Öğüne Ekle", key="add_to_meal_btn"):
+        # Öğüne ekleme yapıldığında arama kutusunu ve gramajı güvenle sıfırlayan callback fonksiyonu
+        def add_meal_and_reset():
             if not selected_food_name:
                 st.error("Lütfen önce bir besin seçin!")
-            else:
-                food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
-                ratio = gramaj / 100.0
-                meal_item = {
-                    "Öğün": meal_type,
-                    "Besin": selected_food_name,
-                    "Gramaj (g)": gramaj,
-                    "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
-                    "Protein (g)": round(food_row["protein"] * ratio, 1),
-                    "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
-                    "Yağ (g)": round(food_row["yag"] * ratio, 1)
-                }
-                current_date_meals.append(meal_item)
-                save_data(db)
-                
-                st.session_state["search_term_input"] = ""
-                st.session_state["reset_gramaj_flag"] = True
-                
-                st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
-                st.rerun()
+                return
+            
+            food_row = food_df[food_df["isim"] == selected_food_name].iloc[0]
+            ratio = gramaj / 100.0
+            meal_item = {
+                "Öğün": meal_type,
+                "Besin": selected_food_name,
+                "Gramaj (g)": gramaj,
+                "Kalori (kcal)": round(food_row["kalori"] * ratio, 1),
+                "Protein (g)": round(food_row["protein"] * ratio, 1),
+                "Karbonhidrat (g)": round(food_row["karbonhidrat"] * ratio, 1),
+                "Yağ (g)": round(food_row["yag"] * ratio, 1)
+            }
+            current_date_meals.append(meal_item)
+            save_data(db)
+            
+            # Form alanlarını sıfırla
+            st.session_state["search_term_input"] = ""
+            st.session_state["gramaj_input"] = 100
+            st.success(f"{gramaj}g {selected_food_name} ({selected_date_str} - {meal_type}) eklendi!")
+
+        st.button("➕ Öğüne Ekle", key="add_to_meal_btn", on_click=add_meal_and_reset)
 
     st.markdown("---")
     st.subheader(f"📋 Eklenen Öğünler Ve Hızlı Düzenleme ({len(current_date_meals)} Adet)")
